@@ -6,17 +6,19 @@
 <title>CampusNet</title>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
 <body data-tab="chat">
 <div id="login">
   <form id="loginForm" class="pane" autocomplete="off">
     <div class="pt"><span id="siteName">CampusNet</span> &mdash; sign in</div>
     <div class="pb">
-      <label>Username<input id="nameIn" maxlength="20" required autofocus spellcheck="false"></label>
+      <label>Username<input id="nameIn" maxlength="20" required autofocus spellcheck="false" autocomplete="username"></label>
+      <label>Password<input id="pwIn" type="password" required minlength="4" maxlength="64" autocomplete="current-password"></label>
       <label id="codeRow" hidden>Access code<input id="codeIn" type="password"></label>
-      <button class="btn" type="submit">Connect</button>
+      <button class="btn primary" type="submit">Connect</button>
       <p id="loginErr" class="err" role="alert"></p>
-      <p class="dim">2-20 characters: letters, digits, _ . -</p>
+      <p class="dim">New here? Pick a username and a password (4+ characters). That name becomes yours.</p>
     </div>
   </form>
 </div>
@@ -25,28 +27,33 @@
   <header id="bar">
     <b id="siteBar">CampusNet</b>
     <span id="meBar"></span>
+    <select id="statusSel" aria-label="Status"><option value="online">online</option><option value="away">away</option><option value="busy">busy</option></select>
     <span id="stat" class="dim">connecting</span>
     <span id="clock" class="dim"></span>
+    <button class="btn sm" id="themeBtn" type="button" title="Toggle light/dark">theme</button>
+    <button class="btn sm" id="outBtn" type="button">sign out</button>
   </header>
   <main>
     <aside id="left">
-      <section class="pane"><div class="pt">Rooms</div><ul id="rooms" class="list"></ul></section>
-      <section class="pane grow"><div class="pt">Online <span id="ucount"></span></div><ul id="users" class="list"></ul></section>
+      <section class="pane"><div class="pt">Channels</div><ul id="rooms" class="list"></ul></section>
+      <section class="pane grow"><div class="pt">People <span id="ucount"></span></div><ul id="users" class="list"></ul></section>
     </aside>
     <section id="center" class="pane">
-      <div class="pt" id="convTitle"></div>
+      <div class="pt split"><span id="convTitle"></span><input id="find" placeholder="find in chat" aria-label="Find in chat"></div>
       <div id="log" role="log" aria-live="polite"></div>
-      <form id="form"><input id="inp" maxlength="1000" placeholder="Message, or /help" autocomplete="off"><button class="btn" type="submit">Send</button></form>
+      <div id="typing" class="dim"></div>
+      <form id="form"><input id="inp" maxlength="1000" placeholder="Message, or /help" autocomplete="off"><button class="btn primary" type="submit">Send</button></form>
     </section>
     <aside id="right" class="pane">
       <div class="pt">Shared files</div>
       <div id="drop"><span>Drop files here</span><button class="btn" id="pick" type="button">Choose files</button><input id="fileIn" type="file" multiple hidden><small id="limit" class="dim"></small></div>
       <div id="prog"></div>
+      <input id="ffind" class="ffind" placeholder="filter files" aria-label="Filter files">
       <ul id="files" class="list"></ul>
     </aside>
   </main>
   <nav id="tabs">
-    <button data-t="rooms">Rooms</button><button data-t="chat" class="on">Chat</button><button data-t="files">Files</button>
+    <button data-t="rooms">People</button><button data-t="chat" class="on">Chat</button><button data-t="files">Files</button>
   </nav>
 </div>
 <script src="app.js"></script>

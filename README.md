@@ -5,12 +5,14 @@ A tiny campus-style intranet that runs in the browser: public rooms, private cha
 Runs on a LAN (everyone on the same Wi-Fi/network) or online on any host that can run Node.js.
 
 ## Features
-- Public rooms (`#general`, `#random`, `#help`) with history
-- Private 1:1 chat (click a user). DMs live in server memory only and are never written to disk
-- File sharing: drag and drop, progress bar, download, delete (own files)
-- Live online list, unread badges, sound on new DM
+- Accounts: pick a username and password the first time; that name is yours (passwords are hashed with scrypt)
+- Channels (`#general`, `#random`, `#help`) with history, plus a notice board that only admins can post to
+- Private 1:1 chat, also to people who are offline (delivered when they come back; DMs live in server memory only, never on disk)
+- Status (online / away / busy), "is typing...", unread badges, sound on DMs and @mentions
+- File sharing: drag and drop or paste, progress bar, image previews, search, download, delete
+- Links become clickable, `@name` highlights mentions, you can delete your own messages
+- Search inside a chat, light/dark theme, phone-friendly tabs
 - Slash commands: `/help`, `/me`, `/w user msg`, `/users`, `/admin code`, `/clear`
-- Works on phones (tabbed layout)
 - One dependency (`ws`)
 
 ## Run on your LAN
@@ -26,7 +28,9 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 | `PORT` | `3000` | Port |
 | `SITE_NAME` | `CampusNet` | Name shown in the UI |
 | `ACCESS_CODE` | none | Shared code required to join (recommended when online) |
-| `ADMIN_CODE` | none | `/admin <code>` lets a user delete any file |
+| `ADMIN_USERS` | none | Comma-separated usernames that are admins (post notices, delete anything) |
+| `ADMIN_CODE` | none | `/admin <code>` makes a signed-in user admin for the session |
+| `TRUST_PROXY` | off | Set to `1` behind a reverse proxy so login throttling sees real IPs |
 | `MAX_FILE_MB` | `100` | Max size per file |
 | `MAX_STORAGE_MB` | `2000` | Max total upload storage |
 | `DATA_DIR` | `./data` | Where chat history and uploads are kept |
@@ -44,10 +48,10 @@ docker run -d -p 3000:3000 -e ACCESS_CODE=secret -v campusnet-data:/data campusn
 Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client automatically uses `wss://` on HTTPS pages.
 
 ## Security notes
-- Usernames are not passwords. Anyone who knows the access code can join with any free name. Keep it for friends/class use, set `ACCESS_CODE` when it is public.
-- Anyone signed in can download any shared file. Do not share secrets.
-- Uploaded files are always served as downloads (never rendered), names are sanitised, WebSocket origin is checked, messages are rate limited, and all text is inserted as plain text (no HTML injection).
-- If a user reconnects with the same name after a restart, the name is simply free again.
+- Accounts are stored in `data/users.json` (scrypt hashes, no plain passwords). Five wrong passwords for a name from one IP locks that name for a minute. There is no password reset: delete the user from `data/users.json` while the server is stopped.
+- Anyone signed in can download any shared file. Do not share secrets. Set `ACCESS_CODE` when the server is public.
+- Files are served as downloads; only png/jpg/gif/webp can be previewed inline (sandboxed, SVG is never rendered). Names are sanitised, WebSocket origin is checked, messages are rate limited, and all text is inserted as plain text.
+- Use HTTPS when online, otherwise passwords travel unencrypted.
 
 ## Files
 | File | Purpose |

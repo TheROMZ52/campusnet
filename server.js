@@ -12,7 +12,11 @@ const CODE = process.env.ACCESS_CODE || '';      // optional shared code to join
 const ADMIN = process.env.ADMIN_CODE || '';      // optional: /admin <code> lets a user delete any file
 const MAX_FILE = (+process.env.MAX_FILE_MB || 100) * 1048576;
 const MAX_TOTAL = (+process.env.MAX_STORAGE_MB || 2000) * 1048576;
+const ADMIN_USERS = (process.env.ADMIN_USERS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ROOMS = ['general', 'random', 'help'];
+const IMGT = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+const IMG = /\.(png|jpe?g|gif|webp)$/i;
 const NAME_RE = /^[\p{L}\p{N}_.-]{2,20}$/u;
 fs.mkdirSync(UP, { recursive: true });
 
@@ -20,6 +24,10 @@ fs.mkdirSync(UP, { recursive: true });
 const rd = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')); } catch { return d; } };
 const hist = rd('messages.json', {}); ROOMS.forEach(r => { hist[r] = Array.isArray(hist[r]) ? hist[r] : []; });
 let files = rd('files.json', []).filter(f => fs.existsSync(path.join(UP, f.id)));
+const users = rd('users.json', {});          // lowercase name -> { name, salt, hash }
+let notices = rd('notices.json', []);
+const fails = new Map();                    // ip -> { n, until }
+const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
 const timers = {};
 const save = (f, v) => { clearTimeout(timers[f]); timers[f] = setTimeout(() => fs.writeFile(path.join(DATA, f), JSON.stringify(v), () => {}), 400); };
 
@@ -36,8 +44,10 @@ const fmt = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' K
 
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 const bcast = o => online().forEach(s => send(s.ws, o));
-const userList = () => online().map(s => s.name).sort((a, b) => a.localeCompare(b));
-const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts }));
+const userList = () => online().map(s => ({ n: s.name, s: s.status || 'online' })).sort((a, b) => a.n.localeCompare(b.n));
+const allNames = () => Object.values(users).map(u => u.name).sort((a, b) => a.localeCompare(b));
+const pushUsers = () => bcast({ t: 'users', users: userList(), all: allNames() });
+const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts, img: IMG.test(name) }));
 function addRoomMsg(room, from, text, kind) {
   const m = { id: uid(), room, from, text, ts: Date.now(), kind };
   hist[room].push(m); if (hist[room].length > 300) hist[room].shift();
@@ -87,7 +97,9 @@ const server = http.createServer((req, res) => {
     if (!sessions.has(url.searchParams.get('t'))) return json(res, 401, { error: 'not signed in' });
     const f = files.find(x => x.id === dl[1]);
     if (!f) return json(res, 404, { error: 'not found' });
-    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': f.size, 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(f.name)}`, ...SEC });
+    const ext = ((f.name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
+    const inline = url.searchParams.get('inline') === '1' && IMGT[ext];
+    res.writeHead(200, { 'Content-Type': inline ? IMGT[ext] : 'application/octet-stream', 'Content-Length': f.size, 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name)}`, ...SEC, ...(inline ? { 'Content-Security-Policy': "default-src 'none'; sandbox" } : {}) });
     return fs.createReadStream(path.join(UP, f.id)).pipe(res);
   }
 
@@ -113,33 +125,52 @@ function dmsFor(name) {
   for (const [key, arr] of dms) if (key.split('|').includes(k)) arr.forEach(m => { const other = m.from.toLowerCase() === k ? m.to : m.from; (out[other] = out[other] || []).push(m); });
   return out;
 }
+function relayTyping(s, m) {
+  const o = { t: 'typing', from: s.name };
+  if (m.room && ROOMS.includes(m.room)) { o.room = m.room; online().forEach(x => { if (x !== s) send(x.ws, o); }); }
+  else if (m.to) { const to = findByName(m.to); if (to && to.ws) send(to.ws, o); }
+}
 function join(ws, m) {
   if (ws.s) return;
   if (CODE && !safeEq(String(m.code || ''), CODE)) return send(ws, { t: 'err', fatal: true, text: 'Wrong access code.' });
   let s = m.token && sessions.get(m.token);
   if (s) { if (s.ws && s.ws !== ws) { const old = s.ws; s.ws = null; try { old.close(); } catch { /* ignore */ } } }
   else {
-    const name = String(m.name || '').trim();
-    if (!NAME_RE.test(name)) return send(ws, { t: 'err', fatal: true, text: 'Name must be 2-20 letters, digits, _ . or -' });
-    const clash = findByName(name);
-    if (clash && clash.ws && clash.ws.readyState === 1) return send(ws, { t: 'err', fatal: true, text: 'That name is already online.' });
-    if (clash) sessions.delete(clash.token);
-    s = { token: crypto.randomBytes(16).toString('hex'), name, admin: false, ws: null };
+    const fail = text => send(ws, { t: 'err', fatal: true, text });
+    const name = String(m.name || '').trim(), pw = String(m.password || '');
+    if (!NAME_RE.test(name)) return fail('Name must be 2-20 letters, digits, _ . or -');
+    const key = name.toLowerCase(), fk = ws.ip + '|' + key, f = fails.get(fk);
+    if (f && f.until > Date.now()) return fail('Too many attempts for this name. Wait a minute.');
+    let u = users[key];
+    if (u) {
+      if (!safeEq(hashPw(pw, u.salt), u.hash)) { const n = ((f && f.n) || 0) + 1; fails.set(fk, { n, until: n >= 5 ? Date.now() + 60000 : 0 }); return fail('Wrong password.'); }
+    } else {
+      if (pw.length < 4 || pw.length > 64) return fail('New username: choose a password (4-64 characters) to claim it.');
+      const salt = crypto.randomBytes(16).toString('hex');
+      u = users[key] = { name, salt, hash: hashPw(pw, salt) }; save('users.json', users);
+    }
+    fails.delete(fk);
+    const clash = findByName(u.name);
+    if (clash) { const old = clash.ws; sessions.delete(clash.token); if (old) { old.s = null; try { old.close(); } catch { /* ignore */ } } }
+    s = { token: crypto.randomBytes(16).toString('hex'), name: u.name, admin: ADMIN_USERS.includes(key), status: 'online', ws: null };
     sessions.set(s.token, s);
   }
   s.ws = ws; ws.s = s;
-  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), files: publicFiles(), maxMB: Math.round(MAX_FILE / 1048576) });
-  bcast({ t: 'users', users: userList() });
+  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), maxMB: Math.round(MAX_FILE / 1048576) });
+  pushUsers();
   addRoomMsg('general', 'system', `${s.name} connected`, 'sys');
 }
 
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
+  ws.ip = (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress;
   ws.alive = true; ws.hits = []; ws.on('pong', () => { ws.alive = true; });
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
     if (m.t === 'join') return join(ws, m);
     const s = ws.s; if (!s) return;
+    if (m.t === 'typing') return relayTyping(s, m);
+    if (m.t === 'bye') { sessions.delete(s.token); ws.s = null; s.ws = null; try { ws.close(); } catch { /* ignore */ } pushUsers(); return addRoomMsg('general', 'system', `${s.name} signed out`, 'sys'); }
     const now = Date.now(); ws.hits = ws.hits.filter(t => now - t < 5000);
     if (ws.hits.length >= 10) return send(ws, { t: 'err', text: 'Slow down a little.' });
     ws.hits.push(now);
@@ -148,12 +179,13 @@ wss.on('connection', ws => {
       const text = clean(m.text); if (!text || !ROOMS.includes(m.room)) return;
       addRoomMsg(m.room, s.name, text, m.kind === 'me' ? 'me' : 'chat');
     } else if (m.t === 'dm') {
-      const text = clean(m.text), to = findByName(m.to);
+      const text = clean(m.text), rec = users[String(m.to || '').toLowerCase()];
       if (!text) return;
-      if (!to) return send(ws, { t: 'err', text: `No user named "${String(m.to).slice(0, 20)}".` });
-      const msg = { id: uid(), from: s.name, to: to.name, text, ts: Date.now(), kind: m.kind === 'me' ? 'me' : 'chat' };
-      const k = dmKey(s.name, to.name), arr = dms.get(k) || []; arr.push(msg); if (arr.length > 100) arr.shift(); dms.set(k, arr);
-      send(ws, { t: 'dm', m: msg }); if (to !== s) send(to.ws, { t: 'dm', m: msg });
+      if (!rec) return send(ws, { t: 'err', text: `No user named "${String(m.to).slice(0, 20)}".` });
+      const to = findByName(rec.name);
+      const msg = { id: uid(), from: s.name, to: rec.name, text, ts: Date.now(), kind: m.kind === 'me' ? 'me' : 'chat' };
+      const k = dmKey(s.name, rec.name), arr = dms.get(k) || []; arr.push(msg); if (arr.length > 100) arr.shift(); dms.set(k, arr);
+      send(ws, { t: 'dm', m: msg }); if (to && to !== s) send(to.ws, { t: 'dm', m: msg });
     } else if (m.t === 'delfile') {
       const f = files.find(x => x.id === m.id);
       if (!f || (f.owner !== s.name && !s.admin)) return send(ws, { t: 'err', text: 'You can only delete your own files.' });
@@ -162,11 +194,25 @@ wss.on('connection', ws => {
     } else if (m.t === 'admin') {
       if (ADMIN && safeEq(String(m.code || ''), ADMIN)) { s.admin = true; send(ws, { t: 'admin', ok: true }); }
       else send(ws, { t: 'err', text: 'Admin is not enabled or the code is wrong.' });
+    } else if (m.t === 'status') {
+      if (['online', 'away', 'busy'].includes(m.status)) { s.status = m.status; pushUsers(); }
+    } else if (m.t === 'delmsg') {
+      const arr = hist[m.room]; if (!arr) return;
+      const i = arr.findIndex(x => x.id === m.id); if (i < 0) return;
+      if (arr[i].from !== s.name && !s.admin) return;
+      arr.splice(i, 1); save('messages.json', hist); bcast({ t: 'delmsg', room: m.room, id: m.id });
+    } else if (m.t === 'notice') {
+      if (!s.admin) return send(ws, { t: 'err', text: 'Only admins can post notices.' });
+      const text = clean(m.text); if (!text) return;
+      notices = [{ id: uid(), text, by: s.name, ts: Date.now() }, ...notices].slice(0, 50); save('notices.json', notices); bcast({ t: 'notices', notices });
+    } else if (m.t === 'delnotice') {
+      if (!s.admin) return;
+      notices = notices.filter(n => n.id !== m.id); save('notices.json', notices); bcast({ t: 'notices', notices });
     }
   });
   ws.on('close', () => {
     const s = ws.s;
-    if (s && s.ws === ws) { s.ws = null; bcast({ t: 'users', users: userList() }); addRoomMsg('general', 'system', `${s.name} disconnected`, 'sys'); }
+    if (s && s.ws === ws) { s.ws = null; pushUsers(); addRoomMsg('general', 'system', `${s.name} disconnected`, 'sys'); }
   });
   ws.on('error', () => {});
 });
