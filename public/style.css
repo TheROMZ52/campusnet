@@ -1,0 +1,78 @@
+:root{--desk:#aab1a3;--panel:#e5e7de;--ink:#1d221c;--dim:#5d655a;--line:#5f6859;--title:#38566d;--titleLo:#2b4457;--hi:#cfd8c5;--sel:#38566d;--dm:#8a3b24;--ok:#2f6b3a;--bad:#a02a22;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--desk);color:var(--ink);font:13px/1.45 var(--mono);display:flex;flex-direction:column}
+[hidden]{display:none!important}
+button,input{font:inherit;color:inherit}
+.dim{color:var(--dim)}
+.err{color:var(--bad);min-height:1.4em;margin:0}
+
+/* panes: flat panels with a pinstriped title bar */
+.pane{background:var(--panel);border:1px solid var(--line);box-shadow:2px 2px 0 rgba(0,0,0,.25);display:flex;flex-direction:column;min-height:0;min-width:0}
+.pt{color:#fff;background:repeating-linear-gradient(0deg,var(--title) 0 2px,var(--titleLo) 2px 3px);padding:3px 8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb{padding:12px;display:flex;flex-direction:column;gap:10px}
+.grow{flex:1}
+.btn{background:var(--hi);border:1px solid var(--line);padding:4px 12px;cursor:pointer;box-shadow:1px 1px 0 rgba(0,0,0,.3)}
+.btn:hover{background:#dbe4d1}.btn:active{box-shadow:none;transform:translate(1px,1px)}
+input{background:#fbfcf7;border:1px solid var(--line);padding:5px 7px;min-width:0}
+input:focus-visible,button:focus-visible{outline:2px solid var(--title);outline-offset:1px}
+
+/* login */
+#login{flex:1;display:grid;place-items:center;padding:16px}
+#loginForm{width:min(360px,100%)}
+#loginForm label{display:flex;flex-direction:column;gap:4px}
+
+/* shell */
+#app{flex:1;display:flex;flex-direction:column;min-height:0}
+#bar{display:flex;gap:16px;align-items:baseline;padding:4px 10px;background:var(--title);color:#fff;border-bottom:1px solid #000}
+#bar .dim{color:#c3d0da}
+#bar #clock{margin-left:auto}
+#stat.ok::before{content:"\25CF ";color:#8fd49a}#stat.bad::before{content:"\25CF ";color:#f09a90}
+main{flex:1;display:grid;grid-template-columns:200px minmax(0,1fr) 280px;gap:8px;padding:8px;min-height:0}
+#left{display:flex;flex-direction:column;gap:8px;min-height:0}
+.list{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
+.list li{display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;border-bottom:1px dotted #b9bfb1}
+.list li:hover{background:var(--hi)}
+.list li.on{background:var(--sel);color:#fff}
+.list .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{background:var(--dm);color:#fff;padding:0 6px;font-size:11px}
+.me{font-weight:700}
+
+/* chat */
+#log{flex:1;overflow:auto;padding:6px 8px;background:#fbfcf7}
+.row{display:flex;gap:8px;padding:1px 0;word-break:break-word}
+.row .t{color:var(--dim);flex:none}
+.row .w{font-weight:700;flex:none}
+.row.sys{color:var(--dim);font-style:italic}
+.row.local{color:var(--ok)}
+.row.dm .w{text-decoration:underline}
+#form{display:flex;gap:6px;padding:6px;border-top:1px solid var(--line)}
+#inp{flex:1}
+
+/* files */
+#drop{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin:8px;padding:10px;border:1px dashed var(--line)}
+#drop.over{background:var(--hi);border-style:solid}
+#prog{padding:0 8px}
+#prog .p{margin-bottom:6px;font-size:12px}
+#prog .bar{height:6px;background:#c8cec0;border:1px solid var(--line)}
+#prog .bar i{display:block;height:100%;width:0;background:var(--title)}
+#files li{flex-wrap:wrap;cursor:default}
+#files .fn{flex:1 1 100%;font-weight:700;word-break:break-all}
+#files .meta{color:var(--dim);font-size:12px;flex:1}
+#files a,#files button{color:var(--title);background:none;border:0;padding:0 4px;text-decoration:underline;cursor:pointer}
+#files button{color:var(--bad)}
+#tabs{display:none}
+
+@media (max-width:860px){
+  main{grid-template-columns:1fr;padding:6px}
+  #left,#center,#right{display:none}
+  body[data-tab=rooms] #left{display:flex}
+  body[data-tab=chat] #center{display:flex}
+  body[data-tab=files] #right{display:flex}
+  #tabs{display:flex;border-top:1px solid #000}
+  #tabs button{flex:1;padding:10px;border:0;border-right:1px solid var(--line);background:var(--panel);cursor:pointer}
+  #tabs button.on{background:var(--sel);color:#fff}
+  #bar{gap:8px;font-size:12px}
+  #inp{font-size:16px}
+}
