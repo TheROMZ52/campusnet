@@ -35,6 +35,7 @@
       <label class="fld" id="pw2Row" hidden><span>Confirm password</span><input id="pw2In" type="password" maxlength="64" autocomplete="new-password"></label>
       <label class="fld" id="codeRow" hidden><span>Access code</span><input id="codeIn" type="password" autocomplete="off"></label>
       <button class="btn primary lg" id="goBtn" type="submit"><span class="lbl">Connect</span><span class="spin" aria-hidden="true"></span></button>
+      <pre id="gateLog" class="gatelog" aria-hidden="true"></pre>
       <p id="loginErr" class="err" role="alert"></p>
     </form>
     <p class="foot" id="gateHint">New here? Open the Register tab, pick a username and a password. That name becomes yours.</p>
@@ -52,7 +53,6 @@
     <div class="chip" id="linkChip" title="Connection"><span class="led" id="led"></span><span id="stat">linking</span><span id="lat" class="dim"></span></div>
     <select id="statusSel" aria-label="Your status"><option value="online">online</option><option value="away">away</option><option value="busy">busy</option></select>
     <div class="chip me"><span class="av" id="meAv">?</span><span id="meBar"></span></div>
-    <span id="clock" class="dim hide-s"></span>
     <button class="icon-btn" id="outBtn" type="button" aria-label="Sign out" title="Sign out"></button>
   </header>
 
@@ -75,6 +75,7 @@
       <div id="typing" aria-live="polite"></div>
       <form id="form" autocomplete="off">
         <button class="icon-btn" id="attach" type="button" aria-label="Attach files" title="Attach files"></button>
+        <span class="prompt" aria-hidden="true">&gt;</span>
         <input id="inp" aria-label="Message" maxlength="1000" placeholder="Message, or /help" autocomplete="off" enterkeyhint="send">
         <button class="btn primary send" type="submit" aria-label="Send"></button>
       </form>
@@ -95,6 +96,15 @@
       <ul id="files" class="list files"></ul>
     </aside>
   </main>
+
+  <footer id="sbar" aria-label="Network status">
+    <span class="seg-s">[ LINK <b id="sbLink">--</b> ]</span>
+    <span class="seg-s">NODES <b id="sbNodes">0</b></span>
+    <span class="seg-s">FILES <b id="sbFiles">0</b></span>
+    <span class="seg-s">LIMIT <b id="sbMax">--</b></span>
+    <span class="grow"></span>
+    <span id="clock" class="boxed">--:--:--</span>
+  </footer>
 
   <nav id="tabs" aria-label="Sections">
     <button data-t="rooms" type="button"><span class="ti" data-i="nodes"></span><span>Nodes</span><span class="tb" id="tbRooms" hidden></span></button>

@@ -1,5 +1,15 @@
 # Release notes
 
+## v0.3.1 - terminal refinements
+- Pure terminal green palette, deeper black panels, double technical borders and a soft glow on headings
+- CRT layer: scanlines over the whole UI, light vignette and one slow scan bar
+- Terminal log prefixes in chat events: `[+]` joins/shares, `[-]` leaves, `[*]` info, `[!]` errors
+- Prompt (`>`) and block caret in the message box
+- Bottom status bar (link, nodes, files, limit) with a boxed HH:MM:SS clock on desktop
+- Live gate log (`[*] opening link...`, `[+] access granted`) driven by the real connection steps
+- Controlled glitch only on the brand (load/hover) and when the link is lost; disabled with reduced motion
+- Node map peers drawn as square terminals
+
 ## v0.3.0 - Netrunner redesign
 - Complete visual identity: black/charcoal glass panels, thin technical borders with corner brackets, neon green accents, monospace labels
 - Live topology map of online nodes (real data, click to DM, packets animate on incoming messages) and an ambient network mesh

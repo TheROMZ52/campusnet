@@ -64,22 +64,23 @@ function rich(text) {
 let reconnectTimer = 0, countdownTimer = 0;
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  st.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', mode: st.mode, name: st.me || st.loginName, password: st.loginPw, code: st.loginCode, token: st.token }));
+  st.ws = ws; if (!st.me) gateLog('[*] opening link...');
+  ws.onopen = () => { if (!st.me) gateLog('[*] authenticating...'); ws.send(JSON.stringify({ t: 'join', mode: st.mode, name: st.me || st.loginName, password: st.loginPw, code: st.loginCode, token: st.token })); };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } handle(m); };
-  ws.onerror = () => { if (!st.me) { setBusy(false); $('#loginErr').textContent = 'Cannot reach the server.'; } };
+  ws.onerror = () => { if (!st.me) { gateLog('[-] link failed', 'bad'); setBusy(false); $('#loginErr').textContent = 'Cannot reach the server.'; } };
   ws.onclose = () => {
     if (st.ws !== ws) return;
     if (!st.me) { setBusy(false); return; }
     st.retry++; const delay = Math.min(1000 * st.retry, 6000); let left = Math.ceil(delay / 1000);
     setLink('reconnecting', 'warn'); clearInterval(countdownTimer);
-    const bar = $('#linkbar'); bar.hidden = false; bar.className = '';
+    const bar = $('#linkbar'); bar.hidden = false; bar.className = ''; void bar.offsetWidth; bar.classList.add('glitch');
     const paint = () => { bar.textContent = `LINK LOST \u2014 reconnecting in ${left}s (attempt ${st.retry})`; };
     paint(); countdownTimer = setInterval(() => { left = Math.max(0, left - 1); paint(); }, 1000);
     clearTimeout(reconnectTimer); reconnectTimer = setTimeout(() => { clearInterval(countdownTimer); connect(); }, delay);
   };
 }
-function setLink(text, cls) { $('#stat').textContent = text; $('#led').className = 'led ' + cls; }
+function setLink(text, cls) { $('#stat').textContent = text; $('#led').className = 'led ' + cls; const b = $('#sbLink'); b.textContent = text; b.className = cls === 'ok' ? '' : cls; }
+function gateLog(line, cls) { const g = $('#gateLog'); const lines = (g.dataset.l ? JSON.parse(g.dataset.l) : []).concat([[line, cls || '']]).slice(-3); g.dataset.l = JSON.stringify(lines); g.replaceChildren(...lines.map(([t, c]) => { const s = el('div', c, t); return s; })); }
 function send(o) { if (st.ws && st.ws.readyState === 1) st.ws.send(JSON.stringify(o)); else toast('Not connected. Message not sent.', 'bad'); }
 function setUsers(list, all) { st.users = list.map(u => u.n); st.status = {}; list.forEach(u => { st.status[u.n] = u.s; }); if (all) st.all = all; viz(); }
 const viz = () => { if (window.NetViz) NetViz.update({ me: st.me, users: st.users.map(n => ({ n, s: st.status[n] })) }); };
@@ -100,9 +101,9 @@ function handle(m) {
       st.rooms = m.rooms; st.hist = m.hist; st.dms = m.dms; st.notices = m.notices || []; st.files = m.files; st.maxMB = m.maxMB; setUsers(m.users, m.all);
       clearTimeout(reconnectTimer); clearInterval(countdownTimer); $('#linkbar').hidden = true;
       if (st.retry) toast('Link restored', 'ok', 2200); st.retry = 0;
-      setBusy(false); $('#login').hidden = true; $('#app').hidden = false;
+      gateLog('[+] access granted', 'ok'); setBusy(false); $('#login').hidden = true; $('#app').hidden = false;
       $('#siteBar').textContent = m.site; document.title = m.site; $('#meBar').textContent = m.me + (m.admin ? ' \u00B7 admin' : ''); $('#meAv').textContent = m.me[0];
-      $('#limit').textContent = 'Up to ' + m.maxMB + ' MB per file';
+      $('#limit').textContent = 'Up to ' + m.maxMB + ' MB per file'; $('#sbMax').textContent = m.maxMB + ' MB';
       setLink('online', 'ok'); renderAll(); viz(); if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
       if (first) local('Welcome, ' + m.me + '. Type /help for commands.');
       break;
@@ -117,7 +118,7 @@ function handle(m) {
     case 'admin': st.admin = true; $('#meBar').textContent = st.me + ' \u00B7 admin'; toast('Admin mode enabled'); renderFiles(); renderLog(); break;
     case 'err':
       if (m.fatal) {
-        setBusy(false); $('#loginErr').textContent = m.text; st.me = ''; try { st.ws.close(); } catch { /* ignore */ }
+        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = m.text; st.me = ''; try { st.ws.close(); } catch { /* ignore */ }
         if (!$('#app').hidden) { $('#app').hidden = true; $('#login').hidden = false; $('#linkbar').hidden = true; }
         const g = $('.gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
       } else { local(m.text, true); toast(m.text, 'bad'); }
@@ -157,7 +158,7 @@ function addRow(m, cls) {
   const e0 = $('#log .empty'); if (e0) e0.remove();
   const r = el('div', 'msg' + (m.kind === 'sys' ? ' sys' : '') + (cls ? ' ' + cls : '') + (m.to ? ' dm' : '') + (m.from === st.me ? ' own' : '')); if (m.id) r.dataset.id = m.id;
   r.append(el('span', 't', hhmm(m.ts || Date.now())));
-  if (m.kind === 'sys') { const b = el('span', 'b', m.text); r.append(b); }
+  if (m.kind === 'sys') { const b = el('span', 'b', m.text); r.dataset.tag = /disconnected|signed out|left\b/i.test(m.text) ? '[-]' : /connected|shared|restored|welcome/i.test(m.text) ? '[+]' : cls === 'err' ? '[!]' : '[*]'; b.dataset.tag = r.dataset.tag; r.append(b); }
   else {
     const { frag, mention } = rich(m.text); const body = el('span', 'b'); body.append(frag);
     if (mention && m.from !== st.me) r.classList.add('mention');
@@ -199,7 +200,7 @@ function renderRooms() {
   st.rooms.forEach(r => ul.append(item(key(st.cur) === 'r:' + r, el('span', 'g', '#'), r, st.unread['r:' + r], () => open('r', r))));
 }
 function renderUsers() {
-  const ul = $('#users'); ul.replaceChildren(); $('#ucount').textContent = st.users.length + ' online';
+  const ul = $('#users'); ul.replaceChildren(); $('#ucount').textContent = st.users.length + ' online'; $('#sbNodes').textContent = st.users.length;
   const names = new Set([...st.users, ...st.all, ...Object.keys(st.dms)]);
   [...names].sort((a, b) => (st.users.includes(b) - st.users.includes(a)) || a.localeCompare(b)).forEach(n => {
     const live = st.users.includes(n), s = live ? (st.status[n] || 'online') : 'off', led = el('span', 'led ' + (s === 'online' ? 'ok' : s === 'away' ? 'warn' : s === 'busy' ? 'bad' : ''));
@@ -212,7 +213,7 @@ const extOf = n => { const m = n.match(/\.([a-z0-9]{1,4})$/i); return m ? m[1] :
 function renderFiles() {
   const ul = $('#files'); ul.replaceChildren(); const q = $('#ffind').value.trim().toLowerCase();
   const list = st.files.filter(f => !q || f.name.toLowerCase().includes(q));
-  $('#fcount').textContent = st.files.length ? st.files.length + ' file' + (st.files.length > 1 ? 's' : '') : '';
+  $('#sbFiles').textContent = st.files.length; $('#fcount').textContent = st.files.length ? st.files.length + ' file' + (st.files.length > 1 ? 's' : '') : '';
   if (!list.length) { const li = el('li'); li.style.cssText = 'cursor:default;border:0;background:none;justify-content:center'; li.append(emptyState('files', st.files.length ? 'No match' : 'Library is empty', st.files.length ? 'Try a different filter.' : 'Files shared by anyone on the network show up here.')); ul.append(li); return; }
   list.forEach(f => {
     const li = el('li'), url = `/f/${f.id}?t=${encodeURIComponent(st.token)}`;
@@ -327,6 +328,8 @@ $('#statusSel').onchange = e => send({ t: 'status', status: e.target.value });
 /* ---------- tabs, clock ---------- */
 function setTab(t) { document.body.dataset.tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); if (t === 'files') { $('#tbFiles').hidden = true; $('#tbFiles').textContent = ''; } }
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.t));
-const tick = () => { const d = new Date(); $('#clock').textContent = d.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short' }) + ' \u00B7 ' + hhmm(d); };
-tick(); setInterval(tick, 20000); setInterval(() => { if (!$('#app').hidden) renderFiles(); }, 60000);
+const tick = () => { $('#clock').textContent = new Date().toLocaleTimeString([], { hour12: false }); };
+tick(); setInterval(tick, 1000); setInterval(() => { if (!$('#app').hidden) renderFiles(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { delete st.unread[key(st.cur)]; renderRooms(); renderUsers(); tabBadges(); updateTitle(); } });
+
+setTimeout(() => { const h = document.querySelector('.gate .brand h1'); if (h) h.classList.add('glitch'); }, 350);
