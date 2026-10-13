@@ -1,5 +1,11 @@
 # Release notes
 
+## v0.3.2 - reference details
+- Panel titles are bracketed (`[ CHANNELS ]`), replacing the square marker
+- File type badges use corner-bracket frames
+- Bottom navigation on phones/tablets is a boxed, bracketed dock
+
+
 ## v0.3.1 - terminal refinements
 - Pure terminal green palette, deeper black panels, double technical borders and a soft glow on headings
 - CRT layer: scanlines over the whole UI, light vignette and one slow scan bar
