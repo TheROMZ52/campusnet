@@ -18,6 +18,9 @@ A private, futuristic file-and-chat network for a LAN or the internet. Netrunner
 - Respects `prefers-reduced-motion`; keyboard friendly (`/` focuses the message box, `Esc` closes dialogs)
 - One dependency (`ws`)
 
+## Preview the look (no server needed)
+Open `public/index.html?demo` in a browser (double-click works, or use the GitHub Pages link of the repo). The real interface runs against a simulated in-browser network: any username and password work, bots chat, uploads and notices are simulated, and a yellow DEMO badge is always shown. Nothing is stored and downloads are disabled. Without `?demo` the page talks to the real server.
+
 ## Run on your LAN
 ```bash
 npm install

@@ -1,5 +1,10 @@
 # Release notes
 
+## v0.3.3 - demo preview
+- `public/index.html?demo` runs the real UI against a simulated in-browser network (no server): bots, chat, DMs, uploads, notices, status, admin
+- Clear DEMO badge; downloads disabled; inactive unless the URL contains `demo`
+- Root `index.html` redirects to the preview, so GitHub Pages can host it
+
 ## v0.3.2 - reference details
 - Panel titles are bracketed (`[ CHANNELS ]`), replacing the square marker
 - File type badges use corner-bracket frames
