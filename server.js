@@ -142,6 +142,8 @@ function join(ws, m) {
     const key = name.toLowerCase(), fk = ws.ip + '|' + key, f = fails.get(fk);
     if (f && f.until > Date.now()) return fail('Too many attempts for this name. Wait a minute.');
     let u = users[key];
+    if (m.mode === 'login' && !u) return fail('No account with that name. Use Register to create one.');
+    if (m.mode === 'register' && u) return fail('That username is already taken. Sign in instead.');
     if (u) {
       if (!safeEq(hashPw(pw, u.salt), u.hash)) { const n = ((f && f.n) || 0) + 1; fails.set(fk, { n, until: n >= 5 ? Date.now() + 60000 : 0 }); return fail('Wrong password.'); }
     } else {

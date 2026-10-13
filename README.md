@@ -1,8 +1,6 @@
 # CampusNet
 
-A tiny campus-style intranet that runs in the browser: public rooms, private chat, file sharing and a live "who is online" list. Flat, text-first workstation look (no windows, no emoji icons).
-
-Runs on a LAN (everyone on the same Wi-Fi/network) or online on any host that can run Node.js.
+A private, futuristic file-and-chat network for a LAN or the internet. Netrunner-style interface (black glass panels, neon green, live node map), accounts, channels, private chat, a broadcast board and fast file sharing. Node.js + WebSocket, one dependency.
 
 ## Features
 - Accounts: pick a username and password the first time; that name is yours (passwords are hashed with scrypt)
@@ -13,6 +11,11 @@ Runs on a LAN (everyone on the same Wi-Fi/network) or online on any host that ca
 - Links become clickable, `@name` highlights mentions, you can delete your own messages
 - Search inside a chat, light/dark theme, phone-friendly tabs
 - Slash commands: `/help`, `/me`, `/w user msg`, `/users`, `/admin code`, `/clear`
+- Live node map: a real-time topology of who is online (click a node to open a private chat)
+- Transfers with progress, speed, ETA, cancel, and a library with previews
+- Connection state with measured latency, automatic reconnect with countdown
+- Mobile-first: bottom navigation on phones, two-column layout on tablets, three panes on desktop
+- Respects `prefers-reduced-motion`; keyboard friendly (`/` focuses the message box, `Esc` closes dialogs)
 - One dependency (`ws`)
 
 ## Run on your LAN
@@ -57,7 +60,10 @@ Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client auto
 | File | Purpose |
 | --- | --- |
 | `server.js` | HTTP, WebSocket, uploads, persistence |
-| `public/index.html`, `style.css`, `app.js` | The UI |
+| `public/index.html` | Markup (gate, shell, dialogs) |
+| `public/style.css` | Design system: tokens, primitives, layout, motion |
+| `public/app.js` | UI logic and WebSocket protocol |
+| `public/net.js` | Background mesh and live topology canvas |
 | `Dockerfile` | Container build |
 
 ## License

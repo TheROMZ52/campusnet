@@ -1,5 +1,18 @@
 # Release notes
 
+## v0.3.0 - Netrunner redesign
+- Complete visual identity: black/charcoal glass panels, thin technical borders with corner brackets, neon green accents, monospace labels
+- Live topology map of online nodes (real data, click to DM, packets animate on incoming messages) and an ambient network mesh
+- New gate: Sign in / Register tabs, password show/hide, strength meter, confirm password, clear errors
+- Transfers: queue with progress, speed, ETA, cancel, failure states; library cards with type badges and previews
+- Connection chip with measured latency, reconnect banner with countdown, toasts, accessible confirm dialogs
+- Mobile-first layout with bottom navigation and unread badges; tablet two-column layout; 44px touch targets
+- Reduced-motion support, focus rings, labelled controls
+- Server: optional `mode` (`login` / `register`) on `join` so a mistyped username is never silently registered (old clients still work)
+- Fix: a fatal error during reconnect now returns to the sign-in screen instead of leaving a dead UI
+- Removed: the light theme (the identity is dark-only)
+
+
 ## v0.2.0 - big update
 - Accounts with passwords (scrypt) so names cannot be taken over; per-name login throttling
 - Notice board (admin only), `ADMIN_USERS` env var

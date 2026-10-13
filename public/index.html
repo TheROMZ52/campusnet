@@ -2,60 +2,115 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CampusNet</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050706">
 <meta name="robots" content="noindex">
+<title>CampusNet</title>
 <link rel="stylesheet" href="style.css">
-<script src="theme.js"></script>
 </head>
 <body data-tab="chat">
-<div id="login">
-  <form id="loginForm" class="pane" autocomplete="off">
-    <div class="pt"><span id="siteName">CampusNet</span> &mdash; sign in</div>
-    <div class="pb">
-      <label>Username<input id="nameIn" maxlength="20" required autofocus spellcheck="false" autocomplete="username"></label>
-      <label>Password<input id="pwIn" type="password" required minlength="4" maxlength="64" autocomplete="current-password"></label>
-      <label id="codeRow" hidden>Access code<input id="codeIn" type="password"></label>
-      <button class="btn primary" type="submit">Connect</button>
-      <p id="loginErr" class="err" role="alert"></p>
-      <p class="dim">New here? Pick a username and a password (4+ characters). That name becomes yours.</p>
-    </div>
-  </form>
-</div>
+<canvas id="mesh" aria-hidden="true"></canvas>
+<div id="scan" aria-hidden="true"></div>
+<div id="linkbar" role="status" hidden></div>
+<div id="toasts" aria-live="polite" aria-atomic="false"></div>
 
+<!-- ============ GATE (sign in / register) ============ -->
+<section id="login">
+  <div class="gate panel">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M24 14l8 5v10l-8 5-8-5V19z" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"/><circle cx="24" cy="24" r="3" fill="currentColor"/><path d="M24 3v8M24 37v8M7 13l7 4M41 13l-7 4M7 35l7-4M41 35l-7-4" stroke="currentColor" stroke-width="1" opacity=".5"/></svg>
+      <div><h1 id="siteName">CampusNet</h1><p class="sub">private mesh network</p></div>
+    </div>
+    <div class="seg" role="tablist" aria-label="Account">
+      <button type="button" role="tab" id="tabIn" aria-selected="true">Sign in</button>
+      <button type="button" role="tab" id="tabUp" aria-selected="false">Register</button>
+    </div>
+    <form id="loginForm" autocomplete="off" novalidate>
+      <label class="fld"><span>Username</span><input id="nameIn" maxlength="20" required spellcheck="false" autocapitalize="off" autocomplete="username" placeholder="2-20 chars: letters, digits, _ . -"></label>
+      <label class="fld"><span>Password</span>
+        <span class="pw"><input id="pwIn" type="password" required maxlength="64" autocomplete="current-password" placeholder="min. 4 characters"><button type="button" id="pwShow" class="ghost" aria-label="Show password" aria-pressed="false">show</button></span>
+      </label>
+      <div id="meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></div>
+      <label class="fld" id="pw2Row" hidden><span>Confirm password</span><input id="pw2In" type="password" maxlength="64" autocomplete="new-password"></label>
+      <label class="fld" id="codeRow" hidden><span>Access code</span><input id="codeIn" type="password" autocomplete="off"></label>
+      <button class="btn primary lg" id="goBtn" type="submit"><span class="lbl">Connect</span><span class="spin" aria-hidden="true"></span></button>
+      <p id="loginErr" class="err" role="alert"></p>
+    </form>
+    <p class="foot" id="gateHint">New here? Open the Register tab, pick a username and a password. That name becomes yours.</p>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
 <div id="app" hidden>
   <header id="bar">
-    <b id="siteBar">CampusNet</b>
-    <span id="meBar"></span>
-    <select id="statusSel" aria-label="Status"><option value="online">online</option><option value="away">away</option><option value="busy">busy</option></select>
-    <span id="stat" class="dim">connecting</span>
-    <span id="clock" class="dim"></span>
-    <button class="btn sm" id="themeBtn" type="button" title="Toggle light/dark">theme</button>
-    <button class="btn sm" id="outBtn" type="button">sign out</button>
+    <div class="brand mini">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="24" cy="24" r="4" fill="currentColor"/></svg>
+      <b id="siteBar">CampusNet</b>
+    </div>
+    <div class="grow"></div>
+    <div class="chip" id="linkChip" title="Connection"><span class="led" id="led"></span><span id="stat">linking</span><span id="lat" class="dim"></span></div>
+    <select id="statusSel" aria-label="Your status"><option value="online">online</option><option value="away">away</option><option value="busy">busy</option></select>
+    <div class="chip me"><span class="av" id="meAv">?</span><span id="meBar"></span></div>
+    <span id="clock" class="dim hide-s"></span>
+    <button class="icon-btn" id="outBtn" type="button" aria-label="Sign out" title="Sign out"></button>
   </header>
+
   <main>
     <aside id="left">
-      <section class="pane"><div class="pt">Channels</div><ul id="rooms" class="list"></ul></section>
-      <section class="pane grow"><div class="pt">People <span id="ucount"></span></div><ul id="users" class="list"></ul></section>
+      <section class="panel">
+        <h2 class="ph"><span>Channels</span></h2>
+        <ul id="rooms" class="list"></ul>
+      </section>
+      <section class="panel grow">
+        <h2 class="ph"><span>Nodes</span><span id="ucount" class="dim"></span></h2>
+        <canvas id="topo" aria-label="Live map of nodes that are online. Select a node to open a private chat." role="img"></canvas>
+        <ul id="users" class="list"></ul>
+      </section>
     </aside>
-    <section id="center" class="pane">
-      <div class="pt split"><span id="convTitle"></span><input id="find" placeholder="find in chat" aria-label="Find in chat"></div>
+
+    <section id="center" class="panel">
+      <div class="ph split"><span id="convTitle"></span><input id="find" type="search" placeholder="find" aria-label="Find in chat"></div>
       <div id="log" role="log" aria-live="polite"></div>
-      <div id="typing" class="dim"></div>
-      <form id="form"><input id="inp" maxlength="1000" placeholder="Message, or /help" autocomplete="off"><button class="btn primary" type="submit">Send</button></form>
+      <div id="typing" aria-live="polite"></div>
+      <form id="form" autocomplete="off">
+        <button class="icon-btn" id="attach" type="button" aria-label="Attach files" title="Attach files"></button>
+        <input id="inp" aria-label="Message" maxlength="1000" placeholder="Message, or /help" autocomplete="off" enterkeyhint="send">
+        <button class="btn primary send" type="submit" aria-label="Send"></button>
+      </form>
     </section>
-    <aside id="right" class="pane">
-      <div class="pt">Shared files</div>
-      <div id="drop"><span>Drop files here</span><button class="btn" id="pick" type="button">Choose files</button><input id="fileIn" type="file" multiple hidden><small id="limit" class="dim"></small></div>
-      <div id="prog"></div>
-      <input id="ffind" class="ffind" placeholder="filter files" aria-label="Filter files">
-      <ul id="files" class="list"></ul>
+
+    <aside id="right" class="panel">
+      <h2 class="ph"><span>Transfers</span></h2>
+      <div id="drop" tabindex="-1">
+        <div class="drop-art" aria-hidden="true"></div>
+        <p class="drop-t"><span class="only-fine">Drop files to broadcast them</span><span class="only-touch">Share files with the network</span></p>
+        <button class="btn" id="pick" type="button">Select files</button>
+        <input id="fileIn" type="file" multiple hidden aria-label="Choose files to upload">
+        <small id="limit" class="dim"></small>
+      </div>
+      <div id="prog" aria-live="polite"></div>
+      <h2 class="ph sub"><span>Library</span><span id="fcount" class="dim"></span></h2>
+      <div class="fbar"><input id="ffind" type="search" placeholder="filter files" aria-label="Filter files"></div>
+      <ul id="files" class="list files"></ul>
     </aside>
   </main>
-  <nav id="tabs">
-    <button data-t="rooms">People</button><button data-t="chat" class="on">Chat</button><button data-t="files">Files</button>
+
+  <nav id="tabs" aria-label="Sections">
+    <button data-t="rooms" type="button"><span class="ti" data-i="nodes"></span><span>Nodes</span><span class="tb" id="tbRooms" hidden></span></button>
+    <button data-t="chat" type="button" class="on"><span class="ti" data-i="chat"></span><span>Chat</span></button>
+    <button data-t="files" type="button"><span class="ti" data-i="files"></span><span>Files</span><span class="tb" id="tbFiles" hidden></span></button>
   </nav>
 </div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" hidden>
+  <div class="dlg panel" role="alertdialog" aria-modal="true" aria-labelledby="mTitle" aria-describedby="mText">
+    <h3 id="mTitle"></h3><p id="mText"></p>
+    <div class="row"><button class="btn" id="mCancel" type="button">Cancel</button><button class="btn primary" id="mOk" type="button">Confirm</button></div>
+  </div>
+</div>
+<script src="net.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
