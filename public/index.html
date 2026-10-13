@@ -45,10 +45,12 @@
 <!-- ============ APP ============ -->
 <div id="app" hidden>
   <header id="bar">
+    <button class="icon-btn only-small" id="appsBtn" type="button" aria-label="Apps" title="Apps"></button>
     <div class="brand mini">
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="24" cy="24" r="4" fill="currentColor"/></svg>
       <b id="siteBar">CampusNet</b>
     </div>
+    <nav id="menubar" role="menubar" aria-label="Menu"></nav>
     <div class="grow"></div>
     <div class="chip" id="linkChip" title="Connection"><span class="led" id="led"></span><span id="stat">linking</span><span id="lat" class="dim"></span></div>
     <select id="statusSel" aria-label="Your status"><option value="online">online</option><option value="away">away</option><option value="busy">busy</option></select>
@@ -56,21 +58,20 @@
     <button class="icon-btn" id="outBtn" type="button" aria-label="Sign out" title="Sign out"></button>
   </header>
 
-  <main>
-    <aside id="left">
-      <section class="panel">
-        <h2 class="ph"><span>Channels</span></h2>
+  <main id="desk">
+    <nav id="launcher" aria-label="Apps"></nav>
+    <section id="pChannels" class="panel">
+      <h2 class="ph"><span>Channels</span></h2>
         <ul id="rooms" class="list"></ul>
-      </section>
-      <section class="panel grow">
-        <h2 class="ph"><span>Nodes</span><span id="ucount" class="dim"></span></h2>
+    </section>
+    <section id="pNodes" class="panel">
+      <h2 class="ph"><span>Nodes</span><span id="ucount" class="dim"></span></h2>
         <canvas id="topo" aria-label="Live map of nodes that are online. Select a node to open a private chat." role="img"></canvas>
         <ul id="users" class="list"></ul>
       </section>
-    </aside>
 
     <section id="center" class="panel">
-      <div class="ph split"><span id="convTitle"></span><input id="find" type="search" placeholder="find" aria-label="Find in chat"></div>
+      <div class="ph split"><span id="convTitle"></span><span id="e2e" class="e2e" hidden></span><input id="find" type="search" placeholder="find" aria-label="Find in chat"></div>
       <div id="log" role="log" aria-live="polite"></div>
       <div id="typing" aria-live="polite"></div>
       <form id="form" autocomplete="off">
@@ -98,6 +99,7 @@
   </main>
 
   <footer id="sbar" aria-label="Network status">
+    <div id="dock" role="toolbar" aria-label="Open windows"></div>
     <span class="seg-s">[ LINK <b id="sbLink">--</b> ]</span>
     <span class="seg-s">NODES <b id="sbNodes">0</b></span>
     <span class="seg-s">FILES <b id="sbFiles">0</b></span>
@@ -121,7 +123,9 @@
   </div>
 </div>
 <script src="net.js"></script>
+<script src="crypto.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
+<script src="shell.js"></script>
 </body>
 </html>

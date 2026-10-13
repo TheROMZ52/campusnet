@@ -1,6 +1,7 @@
 'use strict';
 /* CampusNet server: static files + WebSocket chat + raw-stream file uploads. Only dependency: ws */
 const http = require('http'), fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
+const https = require('https'), { execFileSync } = require('child_process');
 const { WebSocketServer } = require('ws');
 
 const PORT = +process.env.PORT || 3000;
@@ -19,6 +20,21 @@ const IMGT = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'im
 const IMG = /\.(png|jpe?g|gif|webp)$/i;
 const NAME_RE = /^[\p{L}\p{N}_.-]{2,20}$/u;
 fs.mkdirSync(UP, { recursive: true });
+
+/* ---------- optional HTTPS (browsers only allow Web Crypto on HTTPS or localhost) ---------- */
+function tlsOptions() {
+  let cert = process.env.TLS_CERT, key = process.env.TLS_KEY;
+  if (!cert && process.env.HTTPS === '1') {
+    cert = path.join(DATA, 'cert.pem'); key = path.join(DATA, 'key.pem');
+    if (!fs.existsSync(cert) || !fs.existsSync(key)) {
+      const ips = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4').map(i => 'IP:' + i.address);
+      try { execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '825', '-subj', '/CN=campusnet', '-addext', 'subjectAltName=DNS:localhost,' + ips.join(',')], { stdio: 'ignore' }); console.log('  created a self-signed certificate in ' + DATA); }
+      catch { console.error('  HTTPS=1 needs openssl to create a certificate (or set TLS_CERT and TLS_KEY).'); process.exit(1); }
+    }
+  }
+  return cert && key ? { cert: fs.readFileSync(cert), key: fs.readFileSync(key) } : null;
+}
+const TLS = tlsOptions();
 
 /* ---------- persistence ---------- */
 const rd = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')); } catch { return d; } };
@@ -46,6 +62,7 @@ const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(
 const bcast = o => online().forEach(s => send(s.ws, o));
 const userList = () => online().map(s => ({ n: s.name, s: s.status || 'online' })).sort((a, b) => a.n.localeCompare(b.n));
 const allNames = () => Object.values(users).map(u => u.name).sort((a, b) => a.localeCompare(b));
+const publicKeys = () => { const o = {}; Object.values(users).forEach(u => { if (u.pub) o[u.name] = u.pub; }); return o; };
 const pushUsers = () => bcast({ t: 'users', users: userList(), all: allNames() });
 const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts, img: IMG.test(name) }));
 function addRoomMsg(room, from, text, kind) {
@@ -62,7 +79,7 @@ const SEC = {
 };
 const json = (res, code, o) => { res.writeHead(code, { 'Content-Type': 'application/json', ...SEC }); res.end(JSON.stringify(o)); };
 
-const server = http.createServer((req, res) => {
+const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h))((req, res) => {
   let url; try { url = new URL(req.url, 'http://x'); } catch { return json(res, 400, { error: 'bad url' }); }
 
   if (url.pathname === '/api/info') return json(res, 200, { name: SITE, needCode: !!CODE, maxMB: Math.round(MAX_FILE / 1048576) });
@@ -158,7 +175,7 @@ function join(ws, m) {
     sessions.set(s.token, s);
   }
   s.ws = ws; ws.s = s;
-  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), maxMB: Math.round(MAX_FILE / 1048576) });
+  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: (users[s.name.toLowerCase()] || {}).pub || null, blob: (users[s.name.toLowerCase()] || {}).blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576) });
   pushUsers();
   addRoomMsg('general', 'system', `${s.name} connected`, 'sys');
 }
@@ -181,13 +198,19 @@ wss.on('connection', (ws, req) => {
       const text = clean(m.text); if (!text || !ROOMS.includes(m.room)) return;
       addRoomMsg(m.room, s.name, text, m.kind === 'me' ? 'me' : 'chat');
     } else if (m.t === 'dm') {
-      const text = clean(m.text), rec = users[String(m.to || '').toLowerCase()];
-      if (!text) return;
+      const rec = users[String(m.to || '').toLowerCase()], e = m.enc;
       if (!rec) return send(ws, { t: 'err', text: `No user named "${String(m.to).slice(0, 20)}".` });
+      if (!e || typeof e.iv !== 'string' || typeof e.ct !== 'string' || e.iv.length > 32 || e.ct.length > 6000) return send(ws, { t: 'err', text: 'Direct messages must be end-to-end encrypted.' });
       const to = findByName(rec.name);
-      const msg = { id: uid(), from: s.name, to: rec.name, text, ts: Date.now(), kind: m.kind === 'me' ? 'me' : 'chat' };
+      const msg = { id: uid(), from: s.name, to: rec.name, enc: { iv: e.iv, ct: e.ct }, ts: Date.now() };
       const k = dmKey(s.name, rec.name), arr = dms.get(k) || []; arr.push(msg); if (arr.length > 100) arr.shift(); dms.set(k, arr);
       send(ws, { t: 'dm', m: msg }); if (to && to !== s) send(to.ws, { t: 'dm', m: msg });
+    } else if (m.t === 'setkey') {
+      const p = m.pub, b = m.blob, ok = (v, n) => typeof v === 'string' && v.length > 0 && v.length <= n;
+      if (!p || p.kty !== 'EC' || p.crv !== 'P-256' || !ok(p.x, 100) || !ok(p.y, 100) || !b || !ok(b.s, 100) || !ok(b.iv, 100) || !ok(b.ct, 3000)) return send(ws, { t: 'err', text: 'Invalid key.' });
+      const u = users[s.name.toLowerCase()]; if (!u) return;
+      u.pub = { kty: p.kty, crv: p.crv, x: p.x, y: p.y }; u.blob = { s: b.s, iv: b.iv, ct: b.ct }; save('users.json', users);
+      bcast({ t: 'key', name: u.name, pub: u.pub });
     } else if (m.t === 'delfile') {
       const f = files.find(x => x.id === m.id);
       if (!f || (f.owner !== s.name && !s.admin)) return send(ws, { t: 'err', text: 'You can only delete your own files.' });
@@ -221,7 +244,9 @@ wss.on('connection', (ws, req) => {
 setInterval(() => wss.clients.forEach(ws => { if (!ws.alive) return ws.terminate(); ws.alive = false; ws.ping(); }), 30000);
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  ${SITE} is running\n  local:   http://localhost:${PORT}`);
-  for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) console.log(`  network: http://${i.address}:${PORT}   <- share this on your LAN`);
+  const proto = TLS ? 'https' : 'http';
+  console.log(`\n  ${SITE} is running\n  local:   ${proto}://localhost:${PORT}`);
+  for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) console.log(`  network: ${proto}://${i.address}:${PORT}   <- share this on your LAN`);
+  if (!TLS) console.log('  note: encrypted DMs need HTTPS or localhost. On a LAN start with HTTPS=1 (self-signed) or put it behind TLS.');
   console.log(`  access code: ${CODE ? 'ON' : 'off'}   max file: ${fmt(MAX_FILE)}\n`);
 });

@@ -5,9 +5,10 @@
   const COL = { online: '51,255,102', away: '255,176,32', busy: '255,77,109' };
   const mesh = document.getElementById('mesh'), mg = mesh.getContext('2d');
   const topo = document.getElementById('topo'), tg = topo ? topo.getContext('2d') : null;
-  let W = 0, H = 0, dpr = 1, nodes = [], peers = [], me = '', packets = [], hits = [], running = false, last = 0;
+  let meshOn = true, W = 0, H = 0, dpr = 1, nodes = [], peers = [], me = '', packets = [], hits = [], running = false, last = 0;
   const api = {
     onPick: null,
+    setMesh(v) { meshOn = !!v; if (!meshOn) mg.clearRect(0, 0, W, H); else drawMesh(0); },
     update(o) { me = o.me; peers = o.users.filter(u => u.n !== o.me).map(u => ({ n: u.n, s: u.s })); if (reduce.matches) drawTopo(performance.now()); else wake(); },
     pulse(name) { if (reduce.matches || !peers.some(p => p.n === name)) return; packets.push({ n: name, t0: performance.now() }); wake(); }
   };
@@ -18,7 +19,7 @@
     mesh.width = W * dpr; mesh.height = H * dpr; mg.setTransform(dpr, 0, 0, dpr, 0, 0);
     const n = Math.round(Math.min(48, Math.max(16, W * H / 30000)));
     nodes = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22, r: Math.random() * 1.1 + .6, p: Math.random() * 6.28 }));
-    drawMesh(0); drawTopo(performance.now());
+    if (meshOn) drawMesh(0); drawTopo(performance.now());
   }
   function drawMesh(t) {
     mg.clearRect(0, 0, W, H);
@@ -62,7 +63,7 @@
   }
   function loop(now) {
     if (document.hidden) { running = false; return; }
-    if (now - last >= 33) { last = now; drawMesh(now); drawTopo(now); }
+    if (now - last >= 33) { last = now; if (meshOn) drawMesh(now); drawTopo(now); }
     requestAnimationFrame(loop);
   }
   function wake() { if (running || reduce.matches) return; running = true; requestAnimationFrame(loop); }

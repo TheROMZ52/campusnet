@@ -5,7 +5,8 @@ A private, futuristic file-and-chat network for a LAN or the internet. Netrunner
 ## Features
 - Accounts: pick a username and password the first time; that name is yours (passwords are hashed with scrypt)
 - Channels (`#general`, `#random`, `#help`) with history, plus a notice board that only admins can post to
-- Private 1:1 chat, also to people who are offline (delivered when they come back; DMs live in server memory only, never on disk)
+- Private 1:1 chat, end-to-end encrypted in the browser (see below), also to people who are offline (kept in server memory only, never on disk)
+- Desktop shell on large screens: menubar, app launcher, movable/resizable windows, dock, plus Terminal, Monitor, Security and Settings apps
 - Status (online / away / busy), "is typing...", unread badges, sound on DMs and @mentions
 - File sharing: drag and drop or paste, progress bar, image previews, search, download, delete
 - Links become clickable, `@name` highlights mentions, you can delete your own messages
@@ -17,6 +18,25 @@ A private, futuristic file-and-chat network for a LAN or the internet. Netrunner
 - Mobile-first: bottom navigation on phones, two-column layout on tablets, three panes on desktop
 - Respects `prefers-reduced-motion`; keyboard friendly (`/` focuses the message box, `Esc` closes dialogs)
 - One dependency (`ws`)
+
+## Desktop (screens 1180px and wider)
+Chat, channels, nodes and files are windows you can drag, resize, minimize, maximize (double-click the title) and close; reopen them from the launcher on the left or the dock at the bottom. The layout is remembered in your browser (View > Tile windows resets it). Extra apps:
+- **Terminal**: `help`, `whoami`, `scan`, `files`, `ping`, `uptime`, `status`, `w <user> <msg>`, `open <#room|user|board>`
+- **Monitor**: live link state, measured latency graph, nodes, library size, unread, session time
+- **Security**: your safety number, your contacts' safety numbers and trust state
+- **Settings**: CRT effect, animated background, sounds, forget trusted keys
+On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
+
+## Encrypted direct messages
+Direct messages are encrypted in your browser with ECDH (P-256) + AES-256-GCM (Web Crypto, no dependencies). Each account has a key pair created on first sign-in; the private key is wrapped with a key derived from your password (PBKDF2) and stored on the server only as an opaque blob, so you can sign in from any device. The server relays ciphertext and rejects plaintext DMs.
+
+Browsers only offer Web Crypto on **HTTPS or localhost**. On a LAN over plain `http://192.168...` encrypted DMs are disabled (the UI says so). Fix: start with `HTTPS=1 npm start` (creates a self-signed certificate with openssl, then open the `https://` address and accept the browser warning once), or set `TLS_CERT` and `TLS_KEY`, or put it behind a TLS proxy.
+
+What it protects, and what it does not:
+- Protects DM content from other users, server logs, memory dumps and network sniffing.
+- Does not hide who talks to whom, when, or how much. Channels, files and notices are not encrypted.
+- A malicious server operator could swap a public key or serve modified code. Compare **safety numbers** (Security app) with your contact over another channel; the app warns and blocks sending if a contact's key changes.
+- There is no password reset: the key is protected by your password. If the stored key cannot be unlocked a new one is created and your contacts see a key change.
 
 ## Preview the look (no server needed)
 Open `public/index.html?demo` in a browser (double-click works, or use the GitHub Pages link of the repo). The real interface runs against a simulated in-browser network: any username and password work, bots chat, uploads and notices are simulated, and a yellow DEMO badge is always shown. Nothing is stored and downloads are disabled. Without `?demo` the page talks to the real server.
@@ -36,6 +56,8 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 | `ACCESS_CODE` | none | Shared code required to join (recommended when online) |
 | `ADMIN_USERS` | none | Comma-separated usernames that are admins (post notices, delete anything) |
 | `ADMIN_CODE` | none | `/admin <code>` makes a signed-in user admin for the session |
+| `HTTPS` | off | Set to `1` to serve HTTPS with an auto-created self-signed certificate (needs openssl) |
+| `TLS_CERT`, `TLS_KEY` | none | Paths to your own certificate and key |
 | `TRUST_PROXY` | off | Set to `1` behind a reverse proxy so login throttling sees real IPs |
 | `MAX_FILE_MB` | `100` | Max size per file |
 | `MAX_STORAGE_MB` | `2000` | Max total upload storage |
@@ -57,7 +79,7 @@ Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client auto
 - Accounts are stored in `data/users.json` (scrypt hashes, no plain passwords). Five wrong passwords for a name from one IP locks that name for a minute. There is no password reset: delete the user from `data/users.json` while the server is stopped.
 - Anyone signed in can download any shared file. Do not share secrets. Set `ACCESS_CODE` when the server is public.
 - Files are served as downloads; only png/jpg/gif/webp can be previewed inline (sandboxed, SVG is never rendered). Names are sanitised, WebSocket origin is checked, messages are rate limited, and all text is inserted as plain text.
-- Use HTTPS when online, otherwise passwords travel unencrypted.
+- Use HTTPS when online, otherwise passwords travel unencrypted. Passwords reach the server at sign-in (it stores only scrypt hashes), so E2E protects against passive observers, not against a server operator who changes the code.
 
 ## Files
 | File | Purpose |
@@ -67,6 +89,9 @@ Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client auto
 | `public/style.css` | Design system: tokens, primitives, layout, motion |
 | `public/app.js` | UI logic and WebSocket protocol |
 | `public/net.js` | Background mesh and live topology canvas |
+| `public/crypto.js` | End-to-end encryption helpers (Web Crypto) |
+| `public/shell.js` | Desktop shell: windows, launcher, menubar, dock, system apps |
+| `public/demo.js` | Preview mode with a simulated network |
 | `Dockerfile` | Container build |
 
 ## License

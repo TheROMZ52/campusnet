@@ -1,5 +1,16 @@
 # Release notes
 
+## v0.4.0 - desktop shell and end-to-end encrypted DMs
+- Desktop shell (>= 1180px): menubar (File, Edit, View, Network, Settings, Help), app launcher with `[ CORE ] [ SOCIAL ] [ SYSTEM ]` tiles, draggable/resizable/minimizable/maximizable windows, dock, remembered layout
+- New apps: Terminal, Monitor (live latency graph), Security (safety numbers), Settings (CRT, mesh, sound)
+- Phones/tablets keep the tabbed layout; apps open full screen from the top-bar grid button
+- End-to-end encrypted direct messages: ECDH P-256 + AES-256-GCM, password-wrapped private key stored as an opaque blob, trust-on-first-use safety numbers with key-change blocking
+- Server rejects plaintext DMs; new `setkey` event and `key` broadcast; `welcome` carries `pub`, `blob`, `keys`
+- Optional HTTPS: `HTTPS=1` (auto self-signed via openssl), `TLS_CERT`, `TLS_KEY`; clear message when the browser context is insecure
+- Demo mode now simulates encrypted bot DMs
+- Breaking: old clients cannot send DMs (they must be encrypted). DM history is still memory-only on the server
+
+
 ## v0.3.3 - demo preview
 - `public/index.html?demo` runs the real UI against a simulated in-browser network (no server): bots, chat, DMs, uploads, notices, status, admin
 - Clear DEMO badge; downloads disabled; inactive unless the URL contains `demo`

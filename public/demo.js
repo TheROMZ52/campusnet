@@ -8,7 +8,11 @@
   const BOTS = { trin: 'online', morpheus: 'away', cypher: 'busy' };
   const LINES = ['anyone seen the new lab schedule?', 'uploaded the slides, grab them from the library', 'the north wing wifi is down again', 'who is up for a study session at 6?', 'reminder: submissions close tonight', 'nice, thanks for sharing', 'I can host the next meetup', 'check the board, there is a new notice'];
   const REPLIES = ['got it', 'sounds good to me', 'lol yes', 'on my way', 'let me check and get back to you', 'thanks, that helps'];
-  let me = '', admin = false, myStatus = 'online', ws = null, timer = 0;
+  const botKeys = {}; let myPub = null;
+  try { localStorage.removeItem('cn:fp'); } catch { /* ignore */ }
+  const keysReady = (window.CN && CN.supported) ? Promise.all(Object.keys(BOTS).map(async n => { botKeys[n] = await CN.genPair(); })) : Promise.resolve();
+  const pubs = () => { const o = {}; Object.keys(botKeys).forEach(n => { o[n] = botKeys[n].pub; }); return o; };
+  let myBlob = null, me = '', admin = false, myStatus = 'online', ws = null, timer = 0;
   const hist = { general: [], random: [], help: [] }, dms = {};
   let files = [
     { id: 'a1b2c3d4e5f60718', name: 'week3-slides.pdf', size: 2411724, owner: 'trin', ts: now() - 3600e3, img: false },
@@ -23,13 +27,16 @@
   const emit = o => setTimeout(() => { if (ws && ws.readyState === 1 && ws.onmessage) ws.onmessage({ data: JSON.stringify(o) }); }, 0);
   const roomMsg = (room, from, text, kind) => { const m = { id: uid(), room, from, text, ts: now(), kind: kind || 'chat' }; hist[room].push(m); emit({ t: 'msg', m }); };
   const botSays = (room, from, text) => { emit({ t: 'typing', from, room }); setTimeout(() => roomMsg(room, from, text), 1400); };
-  const dmFrom = (from, text) => { const m = { id: uid(), from, to: me, text, ts: now(), kind: 'chat' }; (dms[from] = dms[from] || []).push(m); emit({ t: 'dm', m }); };
+  async function botDm(from, text) {
+    if (!myPub || !botKeys[from]) return;
+    const key = await CN.shared(botKeys[from].kp.privateKey, myPub), enc = await CN.encrypt(key, from, me, { text, kind: 'chat' });
+    const m = { id: uid(), from, to: me, enc, ts: now() }; (dms[from] = dms[from] || []).push(m); emit({ t: 'dm', m });
+  }
 
   function handle(m) {
     if (m.t === 'join') {
       me = String(m.name || 'guest').slice(0, 20); admin = false;
-      emit({ t: 'welcome', me, token: 'demo-' + uid(), admin, site: 'CampusNet', rooms: ['general', 'random', 'help'], hist, dms, users: userList(), all: names(), notices, files, maxMB: 100 });
-      roomMsg('general', 'system', me + ' connected', 'sys');
+      keysReady.then(() => { emit({ t: 'welcome', me, token: 'demo-' + uid(), admin, site: 'CampusNet', rooms: ['general', 'random', 'help'], hist, dms, users: userList(), all: names(), notices, files, maxMB: 100, pub: myPub, blob: myBlob, keys: Object.assign(pubs(), myPub ? { [me]: myPub } : {}) }); roomMsg('general', 'system', me + ' connected', 'sys'); });
       clearInterval(timer); timer = setInterval(() => botSays('general', pick(Object.keys(BOTS)), pick(LINES)), 11000);
     } else if (m.t === 'msg') {
       const text = String(m.text || '').trim(); if (!text) return;
@@ -38,9 +45,11 @@
     } else if (m.t === 'dm') {
       const to = Object.keys(BOTS).find(n => n === String(m.to).toLowerCase());
       if (!to) return emit({ t: 'err', text: 'No user named "' + String(m.to).slice(0, 20) + '".' });
-      const msg = { id: uid(), from: me, to, text: String(m.text).slice(0, 1000), ts: now(), kind: m.kind === 'me' ? 'me' : 'chat' };
+      if (!m.enc) return emit({ t: 'err', text: 'Direct messages must be end-to-end encrypted.' });
+      const msg = { id: uid(), from: me, to, enc: m.enc, ts: now() };
       (dms[to] = dms[to] || []).push(msg); emit({ t: 'dm', m: msg });
-      setTimeout(() => { emit({ t: 'typing', from: to }); setTimeout(() => dmFrom(to, pick(REPLIES)), 1200); }, 600);
+      setTimeout(() => { emit({ t: 'typing', from: to }); setTimeout(() => botDm(to, pick(REPLIES)), 1200); }, 600);
+    } else if (m.t === 'setkey') { myPub = m.pub; myBlob = m.blob; emit({ t: 'key', name: me, pub: myPub });
     } else if (m.t === 'status') { if (['online', 'away', 'busy'].includes(m.status)) { myStatus = m.status; emit({ t: 'users', users: userList(), all: names() }); } }
     else if (m.t === 'delmsg') { const a = hist[m.room]; const i = a ? a.findIndex(x => x.id === m.id) : -1; if (i >= 0 && (a[i].from === me || admin)) { a.splice(i, 1); emit({ t: 'delmsg', room: m.room, id: m.id }); } }
     else if (m.t === 'delfile') { const f = files.find(x => x.id === m.id); if (f && (f.owner === me || admin)) { files = files.filter(x => x !== f); emit({ t: 'files', files }); } }
