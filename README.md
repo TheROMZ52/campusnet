@@ -20,7 +20,7 @@ A private, futuristic file-and-chat network for a LAN or the internet. Netrunner
 - One dependency (`ws`)
 
 ## Desktop (screens 1180px and wider)
-Chat, channels, nodes and files are windows you can drag, resize, minimize, maximize (double-click the title) and close; reopen them from the launcher on the left or the dock at the bottom. The layout is remembered in your browser (View > Tile windows resets it). Extra apps:
+After sign-in you land on an empty desktop whose wallpaper is the live map of online nodes. Apps open as windows from the icons on the left or the Start menu: Messages (channels and people inside), Network, Files, Board. Windows can be dragged, resize, minimize, maximize (double-click the title) and close; reopen them from the launcher on the left or the dock at the bottom. The layout is remembered in your browser (View > Tile windows resets it). Extra apps:
 - **Terminal**: `help`, `whoami`, `scan`, `files`, `ping`, `uptime`, `status`, `w <user> <msg>`, `open <#room|user|board>`
 - **Monitor**: live link state, measured latency graph, nodes, library size, unread, session time
 - **Security**: your safety number, your contacts' safety numbers and trust state

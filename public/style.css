@@ -403,3 +403,46 @@ body.os #menubar{display:flex;gap:2px;margin-left:14px}
 .e2e{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border:1px solid var(--line2);border-radius:999px;color:var(--neon);font:700 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;text-shadow:none;flex:none}
 .e2e svg{width:12px;height:12px}
 .e2e.bad{color:var(--bad);border-color:var(--bad)}.e2e.nokey,.e2e.off{color:var(--warn);border-color:var(--warn)}
+
+/* =====================================================================
+   12 ---- OS layer: wallpaper map, Messages layout, taskbar, start menu, lock, boot
+   ===================================================================== */
+#wall{display:none}
+body.os #wall{display:block;position:absolute;inset:0;width:100%;height:100%;z-index:0}
+body.os #pChannels{display:none!important}
+body.os #topo{height:auto;flex:1;min-height:0;border-bottom:0}
+body.os #pNodes>.ph #ucount{display:inline}
+.osbadge{display:none;margin-left:-4px;padding:0 6px;border:1px solid var(--neon);color:var(--neon);font:700 10px/16px var(--mono);letter-spacing:.2em;text-shadow:0 0 8px rgba(51,255,102,.6)}
+body.os .osbadge{display:inline-block}
+
+/* Messages window = channel + people sidebar and the conversation */
+body.os #center{display:grid;grid-template-columns:196px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto}
+body.os #center>.ph{grid-column:1/-1}
+body.os #msgSide{grid-column:1;grid-row:2/5;display:flex;flex-direction:column;min-height:0;overflow:auto;border-right:1px solid var(--line);background:rgba(0,0,0,.22)}
+body.os #msgSide .list{flex:none;overflow:visible;padding:2px 6px}
+body.os #log{grid-column:2;grid-row:2}body.os #typing{grid-column:2;grid-row:3}body.os #form{grid-column:2;grid-row:4}
+.sh{padding:10px 12px 4px;font:600 10px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.sh:not(:first-child){margin-top:6px;border-top:1px solid var(--line)}
+
+/* taskbar */
+#sbar{gap:10px}
+.start{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 14px 2px 10px;border:1px solid var(--line2);background:var(--neon-t);color:var(--neon);font:700 11px var(--mono);letter-spacing:.18em;text-transform:uppercase;cursor:pointer;text-shadow:0 0 8px rgba(51,255,102,.5);transition:background .15s,box-shadow .15s}
+.start svg{width:16px;height:16px;filter:drop-shadow(0 0 4px rgba(51,255,102,.7))}
+.start:hover,.start[aria-expanded=true]{background:rgba(51,255,102,.2);box-shadow:0 0 14px rgba(51,255,102,.3)}
+#startmenu{position:fixed;left:10px;bottom:48px;width:300px;max-height:calc(100vh - 110px);overflow:auto;z-index:50;padding:6px;animation:rise .18s var(--ease)}
+#startmenu.panel::before,#startmenu.panel::after{display:none}
+.sm-head{display:flex;align-items:center;gap:10px;padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:2px}
+.sm-head b{font:700 13px var(--mono);letter-spacing:.06em}.sm-head small{margin-left:auto;font:600 10px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+#startmenu .cat{margin:10px 10px 4px}
+#startmenu .mi svg{width:18px;height:18px;color:var(--neon);flex:none}
+.sm-foot{display:flex;gap:8px;padding:10px 8px 6px;border-top:1px solid var(--line);margin-top:8px}.sm-foot .btn{flex:1;min-height:34px}
+
+/* boot + lock */
+#osboot{position:fixed;inset:0;z-index:88;background:#020403;display:flex;align-items:flex-end;padding:40px;animation:fade .15s}
+#osboot.out{opacity:0;transition:opacity .45s}
+#bootlog{margin:0;font:13px/1.7 var(--mono);color:var(--neon);text-shadow:0 0 8px rgba(51,255,102,.6);white-space:pre-wrap}
+#lock{position:fixed;inset:0;z-index:85;display:grid;place-items:center;padding:16px;background:rgba(2,4,3,.93);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);animation:fade .2s}
+#lockForm{width:min(340px,100%);padding:24px;gap:12px;align-items:center;text-align:center}
+#lockForm .logo{width:54px;height:54px;color:var(--neon)}
+#lockForm h3{font:700 16px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+#lockForm input{width:100%}#lockForm .row{width:100%}#lockForm .row .btn{flex:1}

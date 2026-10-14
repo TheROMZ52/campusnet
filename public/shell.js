@@ -7,27 +7,26 @@
   const os = () => document.body.classList.contains('os');
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const APPS = {
-    terminal: { title: 'Terminal', ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
-    chat: { title: 'Chat', ic: 'chat', cat: 'Core', sel: '#center', tab: 'chat' },
+    chat: { title: 'Messages', ic: 'chat', cat: 'Core', sel: '#center', tab: 'chat' },
     board: { title: 'Board', ic: 'board', cat: 'Core', alias: 'chat' },
-    nodes: { title: 'Nodes', ic: 'nodes', cat: 'Social', sel: '#pNodes', tab: 'rooms' },
-    channels: { title: 'Channels', ic: 'hash', cat: 'Social', sel: '#pChannels', tab: 'rooms' },
-    files: { title: 'Files', ic: 'files', cat: 'Social', sel: '#right', tab: 'files' },
+    terminal: { title: 'Terminal', ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
+    nodes: { title: 'Network', ic: 'nodes', cat: 'Network', sel: '#pNodes', tab: 'rooms' },
+    files: { title: 'Files', ic: 'files', cat: 'Network', sel: '#right', tab: 'files' },
     monitor: { title: 'Monitor', ic: 'monitor', cat: 'System', w: 460, h: 400, build: buildMonitor },
     security: { title: 'Security', ic: 'shield', cat: 'System', w: 540, h: 460, build: buildSecurity },
-    settings: { title: 'Settings', ic: 'gear', cat: 'System', w: 440, h: 380, build: buildSettings }
+    settings: { title: 'Settings', ic: 'gear', cat: 'System', w: 440, h: 420, build: buildSettings }
   };
   const wins = {}; let sized = false, zTop = 20, focusId = '', term = null, saveT = 0;
 
   /* ---------- geometry ---------- */
   function defaults() {
-    const W = desk.clientWidth || 1200, H = desk.clientHeight || 700, L = 232, g = 12, cw = 260, fw = clamp(Math.round(W * .24), 280, 340);
-    const topH = Math.round((H - g * 3) * .36), chatW = Math.max(360, W - L - cw - fw - g * 3 - 4);
+    const W = desk.clientWidth || 1200, H = desk.clientHeight || 700, L = 244, g = 16;
     const d = {
-      channels: { x: L, y: g, w: cw, h: topH }, nodes: { x: L, y: g * 2 + topH, w: cw, h: H - topH - g * 3 },
-      chat: { x: L + cw + g, y: g, w: chatW, h: H - g * 2 }, files: { x: L + cw + g + chatW + g, y: g, w: fw, h: H - g * 2 }
+      chat: { x: L + 20, y: 28, w: clamp(Math.round(W * .5), 560, 780), h: clamp(H - 80, 380, 620) },
+      nodes: { x: L + 70, y: 56, w: 560, h: clamp(H - 130, 340, 520) },
+      files: { x: Math.max(L + 40, W - 420 - g), y: 40, w: 400, h: clamp(H - 100, 380, 580) }
     };
-    let n = 0; ['terminal', 'monitor', 'security', 'settings'].forEach(id => { d[id] = { x: L + 60 + n * 34, y: 40 + n * 34, w: APPS[id].w, h: APPS[id].h }; n++; });
+    let n = 0; ['terminal', 'monitor', 'security', 'settings'].forEach(id => { d[id] = { x: L + 90 + n * 34, y: 70 + n * 34, w: APPS[id].w, h: APPS[id].h }; n++; });
     return d;
   }
   function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { const o = {}; Object.entries(wins).forEach(([id, w]) => { o[id] = { x: w.x, y: w.y, w: w.w, h: w.h, open: w.open, min: w.min, max: w.max }; }); localStorage.setItem(LS, JSON.stringify(o)); } catch { /* ignore */ } }, 300); }
@@ -73,7 +72,7 @@
     const a = APPS[id]; let node;
     if (a.sel) node = $(a.sel);
     else { node = el('section', 'panel app-win wclosed'); node.setAttribute('role', 'dialog'); node.setAttribute('aria-label', a.title); node.append(el('h2', 'ph')); node.firstChild.append(el('span', null, a.title)); node.append(el('div', 'wbody')); desk.append(node); }
-    wins[id] = { id, node, title: a.title, base: !!a.sel, open: !!a.sel, min: false, max: false, built: !!a.sel, x: 0, y: 0, w: 400, h: 300, z: 20 };
+    wins[id] = { id, node, title: a.title, base: !!a.sel, open: false, min: false, max: false, built: !!a.sel, x: 0, y: 0, w: 400, h: 300, z: 20 };
     chrome(id);
   }
 
@@ -87,20 +86,23 @@
       if (w.base) { if (a.tab) { setTab(a.tab); } return; }
       ensure(id); w.open = true; apply(id); emitUI('state'); return;
     }
-    ensure(id); w.open = true; w.min = false; apply(id); focus(id); save(); emitUI('state');
+    ensure(id); if (!w.open && !w.placed) placeNew(w); w.open = true; w.min = false; apply(id); focus(id); save(); emitUI('state');
     if (id === 'terminal' && term) term.focus();
   }
+  function placeNew(w) { const k = Object.values(wins).filter(x => x !== w && x.open && !x.min).length; w.x += k * 28; w.y += k * 28; fit(w); w.placed = true; }
   function close(id) { const w = wins[id]; if (!os() && w.base) return; w.open = false; w.min = false; apply(id); renderDock(); renderLauncher(); save(); }
   function minimize(id) { wins[id].min = true; apply(id); const next = Object.values(wins).filter(w => w.open && !w.min).sort((a, b) => b.z - a.z)[0]; if (next) focus(next.id); else renderDock(); save(); }
   function toggleMax(id) { const w = wins[id]; w.max = !w.max; apply(id); focus(id); save(); }
   function tile() {
-    const d = defaults(); Object.entries(wins).forEach(([id, w]) => { Object.assign(w, d[id], { min: false, max: false }); if (w.base) w.open = true; apply(id); }); focus('chat'); save();
+    const d = defaults(); let k = 0;
+    Object.entries(wins).forEach(([id, w]) => { Object.assign(w, d[id], { min: false, max: false }); if (w.open) { w.x += k * 28; w.y += k * 28; k++; fit(w); } w.placed = true; apply(id); });
+    save();
   }
   function closeAll() { Object.keys(wins).forEach(id => { wins[id].open = false; apply(id); }); renderDock(); renderLauncher(); save(); }
   function restore() {
     const d = defaults(); let saved = {}; try { saved = JSON.parse(localStorage.getItem(LS)) || {}; } catch { /* ignore */ }
     sized = desk.clientWidth > 0;
-    Object.entries(wins).forEach(([id, w]) => { const s = saved[id], g = d[id]; Object.assign(w, g); if (s) { Object.assign(w, { x: s.x, y: s.y, w: s.w, h: s.h, max: !!s.max, min: !!s.min }); w.open = w.base ? s.open !== false : !!s.open; } fit(w); if (w.open && !w.built) ensure(id); });
+    Object.entries(wins).forEach(([id, w]) => { const s = saved[id], g = d[id]; Object.assign(w, g); if (s) { Object.assign(w, { x: s.x, y: s.y, w: s.w, h: s.h, max: !!s.max, min: !!s.min }); w.open = !!s.open; w.placed = true; } else { w.open = false; } fit(w); if (w.open && !w.built) ensure(id); });
   }
   function fit(w) { const W = desk.clientWidth, H = desk.clientHeight; w.w = clamp(w.w, 260, Math.max(260, W)); w.h = clamp(w.h, 160, Math.max(160, H)); w.x = clamp(w.x, 120 - w.w, Math.max(0, W - 120)); w.y = clamp(w.y, 0, Math.max(0, H - 36)); }
 
@@ -110,7 +112,7 @@
   function renderLauncher() {
     const box = $('#launcher'); box.replaceChildren();
     if (box.classList.contains('ov')) { box.append(el('h3', null, 'Apps')); const x = el('button', 'icon-btn ov-close'); x.append(icon('x')); x.setAttribute('aria-label', 'Close apps'); x.onclick = closeLauncher; box.append(x); }
-    ['Core', 'Social', 'System'].forEach(cat => {
+    ['Core', 'Network', 'System'].forEach(cat => {
       box.append(el('div', 'cat', '[ ' + cat + ' ]')); const row = el('div', 'tiles');
       Object.entries(APPS).filter(([, a]) => a.cat === cat).forEach(([id, a]) => {
         const real = a.alias || id, w = wins[real], t = el('button', 'tile' + (w && w.open && os() && !w.min ? ' run' : '')); t.type = 'button';
@@ -120,6 +122,7 @@
   }
   function renderDock() {
     const d = $('#dock'); d.replaceChildren();
+    if (window.NetViz) NetViz.setHint(os() && !Object.values(wins).some(w => w.open && !w.min) ? 'NO OPEN WINDOWS  /  SELECT AN APP' : '');
     Object.values(wins).filter(w => w.open).forEach(w => {
       const b = el('button', 'dk' + (focusId === w.id && !w.min ? ' on' : '') + (w.min ? ' mn' : ''), w.title); b.type = 'button'; b.setAttribute('aria-label', w.title + (w.min ? ' (minimized)' : ''));
       b.onclick = () => { if (w.min) { w.min = false; apply(w.id); focus(w.id); } else if (focusId === w.id) minimize(w.id); else focus(w.id); save(); }; d.append(b);
@@ -128,7 +131,8 @@
   const setStatus = s => { $('#statusSel').value = s; send({ t: 'status', status: s }); };
   const togglePref = k => { prefs[k] = !prefs[k]; savePrefs(); applyPrefs(); };
   const MENUS = {
-    File: [['Upload files...', () => $('#fileIn').click()], ['Sign out...', () => $('#outBtn').click()]],
+    System: [['About CampusNet OS', () => toast('CampusNet OS: a private mesh network. Windows, apps and encrypted messages run in your browser.')], ['Lock screen', () => lock()], ['Sign out...', () => $('#outBtn').click()]],
+    File: [['Upload files...', () => $('#fileIn').click()]],
     Edit: [['Find in chat', () => { launch('chat'); $('#find').focus(); }], ['Filter files', () => { launch('files'); $('#ffind').focus(); }], ['Clear chat view', () => $('#log').replaceChildren()]],
     View: [['Tile windows', tile], ['Close all windows', closeAll], ['CRT scanlines', () => togglePref('crt'), () => prefs.crt], ['Network mesh', () => togglePref('mesh'), () => prefs.mesh]],
     Network: [['Scan nodes', () => { launch('terminal'); term.run('scan'); }], ['Monitor', () => launch('monitor')], ['Security keys', () => launch('security')], ['Status: online', () => setStatus('online')], ['Status: away', () => setStatus('away')], ['Status: busy', () => setStatus('busy')]],
@@ -231,17 +235,57 @@
   }
   function buildSettings(body) {
     body.classList.add('set');
-    const tog = (k, label) => { const l = el('label', 'tog'), i = el('input'); i.type = 'checkbox'; i.checked = !!prefs[k]; i.onchange = () => { prefs[k] = i.checked; savePrefs(); applyPrefs(); }; l.append(el('span', null, label), i); return l; };
+    const tog = (k, label) => { const l = el('label', 'tog'), i = el('input'); i.type = 'checkbox'; i.checked = prefs[k] !== false && !!prefs[k] || (k === 'boot' && prefs.boot !== false); i.onchange = () => { prefs[k] = i.checked; savePrefs(); applyPrefs(); }; l.append(el('span', null, label), i); return l; };
     const btn = (t, fn) => { const b = el('button', 'btn', t); b.type = 'button'; b.onclick = fn; return b; }, row = el('div', 'row');
     row.append(btn('Reset window layout', () => { if (os()) tile(); else toast('Window layout applies on large screens'); }), btn('Forget trusted keys', async () => { if (await ask({ title: 'Forget trusted keys', text: 'Safety numbers you saved on this device will be cleared. Contacts are checked again the next time you message them.', ok: 'Forget', danger: true })) { forgetKeys(); toast('Trusted keys cleared'); } }));
-    body.append(tog('crt', 'CRT scanlines and vignette'), tog('mesh', 'Animated network background'), tog('sound', 'Sound alerts for DMs and mentions'), row, el('p', 'note', 'Settings are stored in this browser only.'));
+    body.append(tog('boot', 'Boot animation after sign-in'), tog('crt', 'CRT scanlines and vignette'), tog('mesh', 'Animated network background'), tog('sound', 'Sound alerts for DMs and mentions'), row, el('p', 'note', 'Settings are stored in this browser only.'));
   }
+
+  /* ---------- OS pieces: messages sidebar, start menu, lock screen, boot ---------- */
+  function mountSidebar(on) {
+    const c = $('#center'); let side = $('#msgSide');
+    if (on && !side) { side = el('div', 'msgside'); side.id = 'msgSide'; side.append(el('div', 'sh', 'Channels'), $('#rooms'), el('div', 'sh', 'People'), $('#users')); c.insertBefore(side, $('#log')); }
+    else if (!on && side) { $('#pChannels').append($('#rooms')); $('#pNodes').append($('#users')); side.remove(); }
+  }
+  const startMenu = $('#startmenu'), startBtn = $('#startBtn');
+  function closeStart() { startMenu.hidden = true; startBtn.setAttribute('aria-expanded', 'false'); }
+  function renderStart() {
+    startMenu.replaceChildren(); const head = el('div', 'sm-head'); head.append(el('span', 'av', st.me ? st.me[0] : '?'), el('b', null, st.me || 'guest'), el('small', 'dim', st.admin ? 'admin' : 'user')); startMenu.append(head);
+    ['Core', 'Network', 'System'].forEach(cat => {
+      startMenu.append(el('div', 'cat', '[ ' + cat + ' ]'));
+      Object.entries(APPS).filter(([, a]) => a.cat === cat).forEach(([id, a]) => { const it = el('button', 'mi'); it.type = 'button'; it.setAttribute('role', 'menuitem'); it.append(icon(a.ic), a.title); it.onclick = () => { closeStart(); launch(id); }; startMenu.append(it); });
+    });
+    const foot = el('div', 'sm-foot'), lk = el('button', 'btn', 'Lock'), so = el('button', 'btn', 'Sign out'); lk.type = so.type = 'button';
+    lk.onclick = () => { closeStart(); lock(); }; so.onclick = () => { closeStart(); $('#outBtn').click(); }; foot.append(lk, so); startMenu.append(foot);
+  }
+  startBtn.onclick = e => { e.stopPropagation(); if (startMenu.hidden) { renderStart(); startMenu.hidden = false; startBtn.setAttribute('aria-expanded', 'true'); const f = startMenu.querySelector('.mi'); if (f) f.focus(); } else closeStart(); };
+  document.addEventListener('pointerdown', e => { if (!startMenu.hidden && !e.target.closest('#startmenu') && !e.target.closest('#startBtn')) closeStart(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !startMenu.hidden) { closeStart(); startBtn.focus(); } });
+  function lock() {
+    $('#lockUser').textContent = st.me; $('#lockPw').value = ''; $('#lockErr').textContent = ''; $('#lock').hidden = false; $('#app').inert = true; setTimeout(() => $('#lockPw').focus(), 30);
+  }
+  $('#lockForm').onsubmit = e => {
+    e.preventDefault();
+    if (st.loginPw && $('#lockPw').value === st.loginPw) { $('#lock').hidden = true; $('#app').inert = false; return; }
+    $('#lockErr').textContent = 'Wrong password.'; const f = $('#lockForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
+  };
+  $('#lockOut').onclick = () => { $('#lock').hidden = true; $('#app').inert = false; $('#outBtn').click(); };
+  let booted = false;
+  function boot() {
+    if (!os() || reduceMotion.matches || prefs.boot === false) return;
+    const b = $('#osboot'), log = $('#bootlog'), lines = ['CampusNet OS', '[*] initialising desktop...', '[+] link established', '[+] identity: ' + st.me + (st.admin ? ' (admin)' : ''), E2E.priv ? '[+] encryption: active' : '[!] encryption: unavailable', '[+] mounting library: ' + st.files.length + ' file(s)', '[+] nodes online: ' + st.users.length, '[*] starting desktop...'];
+    b.hidden = false; b.classList.remove('out'); log.textContent = ''; let i = 0;
+    const step = () => { if (i < lines.length) { log.textContent += lines[i++] + '\n'; setTimeout(step, 100); } else setTimeout(() => { b.classList.add('out'); setTimeout(() => { b.hidden = true; }, 450); }, 220); };
+    step();
+  }
+  document.addEventListener('cn:welcome', () => { if (!booted) { booted = true; boot(); } });
+  if (window.NetViz) NetViz.onPick = n => { open('d', n); launch('chat'); };
 
   /* ---------- mode switching ---------- */
   function setMode() {
-    document.body.classList.toggle('os', mq.matches);
+    document.body.classList.toggle('os', mq.matches); mountSidebar(mq.matches);
     if (mq.matches) restore();
-    Object.keys(wins).forEach(apply); renderLauncher(); renderDock(); if (mq.matches) focus(focusId && wins[focusId] ? focusId : 'chat');
+    Object.keys(wins).forEach(apply); renderLauncher(); renderDock(); if (mq.matches && focusId && wins[focusId]) focus(focusId);
   }
   const origSetTab = window.setTab;
   window.setTab = t => { origSetTab(t); if (os()) { if (t === 'chat') launch('chat'); else if (t === 'files') launch('files'); } };
@@ -252,6 +296,6 @@
   $('#appsBtn').setAttribute('aria-label', 'Apps'); $('#appsBtn').replaceChildren(icon('apps'));
   $('#appsBtn').onclick = () => { launcherOpen = true; $('#launcher').classList.add('ov'); renderLauncher(); };
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#launcher').classList.contains('ov')) closeLauncher(); });
-  document.addEventListener('cn:state', () => { if (os() && !sized && desk.clientWidth > 0) { restore(); Object.keys(wins).forEach(apply); focus(focusId || 'chat'); } renderDock(); });
+  document.addEventListener('cn:state', () => { if (os() && !sized && desk.clientWidth > 0) { restore(); Object.keys(wins).forEach(apply); if (focusId) focus(focusId); } renderDock(); });
   window.Shell = { launch, tile };
 })();

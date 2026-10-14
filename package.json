@@ -1,6 +1,6 @@
 {
   "name": "campusnet",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A tiny campus-style intranet: public/private chat, file sharing and a live online list. Runs on a LAN or online.",
   "main": "server.js",
   "scripts": { "start": "node server.js" },

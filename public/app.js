@@ -13,7 +13,7 @@ const fmt = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' K
 const ago = ts => { const s = (Date.now() - ts) / 1000; return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
 const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const prefs = Object.assign({ crt: true, mesh: true, sound: true }, (() => { try { return JSON.parse(localStorage.getItem('cn:prefs')) || {}; } catch { return {}; } })());
+const prefs = Object.assign({ crt: true, mesh: true, sound: true, boot: true }, (() => { try { return JSON.parse(localStorage.getItem('cn:prefs')) || {}; } catch { return {}; } })());
 const savePrefs = () => { try { localStorage.setItem('cn:prefs', JSON.stringify(prefs)); } catch { /* ignore */ } };
 function applyPrefs() { document.body.classList.toggle('no-crt', !prefs.crt); document.body.classList.toggle('no-mesh', !prefs.mesh); if (window.NetViz && NetViz.setMesh) NetViz.setMesh(prefs.mesh); }
 applyPrefs();
@@ -171,6 +171,7 @@ async function handle(m) {
       $('#limit').textContent = 'Up to ' + m.maxMB + ' MB per file'; $('#sbMax').textContent = m.maxMB + ' MB';
       setLink('online', 'ok'); renderAll(); viz(); if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
       if (first) local('Welcome, ' + m.me + '. Type /help for commands.');
+      emitUI('welcome');
       break;
     }
     case 'users': setUsers(m.users, m.all); renderUsers(); break;

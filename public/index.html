@@ -48,7 +48,7 @@
     <button class="icon-btn only-small" id="appsBtn" type="button" aria-label="Apps" title="Apps"></button>
     <div class="brand mini">
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="24" cy="24" r="4" fill="currentColor"/></svg>
-      <b id="siteBar">CampusNet</b>
+      <b id="siteBar">CampusNet</b><span class="osbadge">OS</span>
     </div>
     <nav id="menubar" role="menubar" aria-label="Menu"></nav>
     <div class="grow"></div>
@@ -59,13 +59,14 @@
   </header>
 
   <main id="desk">
+    <canvas id="wall" aria-hidden="true"></canvas>
     <nav id="launcher" aria-label="Apps"></nav>
     <section id="pChannels" class="panel">
       <h2 class="ph"><span>Channels</span></h2>
         <ul id="rooms" class="list"></ul>
     </section>
     <section id="pNodes" class="panel">
-      <h2 class="ph"><span>Nodes</span><span id="ucount" class="dim"></span></h2>
+      <h2 class="ph"><span>Network</span><span id="ucount" class="dim"></span></h2>
         <canvas id="topo" aria-label="Live map of nodes that are online. Select a node to open a private chat." role="img"></canvas>
         <ul id="users" class="list"></ul>
       </section>
@@ -83,7 +84,7 @@
     </section>
 
     <aside id="right" class="panel">
-      <h2 class="ph"><span>Transfers</span></h2>
+      <h2 class="ph"><span>Files</span></h2>
       <div id="drop" tabindex="-1">
         <div class="drop-art" aria-hidden="true"></div>
         <p class="drop-t"><span class="only-fine">Drop files to broadcast them</span><span class="only-touch">Share files with the network</span></p>
@@ -98,7 +99,8 @@
     </aside>
   </main>
 
-  <footer id="sbar" aria-label="Network status">
+  <footer id="sbar" aria-label="Taskbar">
+    <button id="startBtn" class="start" type="button" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="5" fill="currentColor"/></svg><span>Start</span></button>
     <div id="dock" role="toolbar" aria-label="Open windows"></div>
     <span class="seg-s">[ LINK <b id="sbLink">--</b> ]</span>
     <span class="seg-s">NODES <b id="sbNodes">0</b></span>
@@ -113,6 +115,18 @@
     <button data-t="chat" type="button" class="on"><span class="ti" data-i="chat"></span><span>Chat</span></button>
     <button data-t="files" type="button"><span class="ti" data-i="files"></span><span>Files</span><span class="tb" id="tbFiles" hidden></span></button>
   </nav>
+</div>
+
+<div id="startmenu" class="panel" role="menu" aria-label="Start menu" hidden></div>
+<div id="osboot" hidden aria-hidden="true"><pre id="bootlog"></pre></div>
+<div id="lock" hidden>
+  <form id="lockForm" class="panel" autocomplete="off">
+    <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="24" cy="24" r="3" fill="currentColor"/></svg>
+    <h3 id="lockUser"></h3><p class="dim">Screen locked. Enter your password to continue.</p>
+    <input id="lockPw" type="password" aria-label="Password" autocomplete="current-password">
+    <p id="lockErr" class="err" role="alert"></p>
+    <div class="row"><button class="btn" id="lockOut" type="button">Sign out</button><button class="btn primary" type="submit">Unlock</button></div>
+  </form>
 </div>
 
 <!-- ============ MODAL ============ -->

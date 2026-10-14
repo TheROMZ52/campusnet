@@ -1,5 +1,11 @@
 # Release notes
 
+## v0.5.0 - CampusNet OS desktop
+- Sign-in lands on an empty desktop: the wallpaper is the live topology of the nodes that are online (click a node to open its private chat)
+- Windows only open when you launch an app: Messages (channels and people live inside it), Network, Files, Board, Terminal, Monitor, Security, Settings
+- Start menu and taskbar (dock, status tray, clock), Lock screen (local password re-entry), boot sequence built from real session data (can be turned off in Settings), System menu
+- Panes renamed to app names (Transfers -> Files, Nodes -> Network); tabbed layout on phones/tablets unchanged
+
 ## v0.4.0 - desktop shell and end-to-end encrypted DMs
 - Desktop shell (>= 1180px): menubar (File, Edit, View, Network, Settings, Help), app launcher with `[ CORE ] [ SOCIAL ] [ SYSTEM ]` tiles, draggable/resizable/minimizable/maximizable windows, dock, remembered layout
 - New apps: Terminal, Monitor (live latency graph), Security (safety numbers), Settings (CRT, mesh, sound)
