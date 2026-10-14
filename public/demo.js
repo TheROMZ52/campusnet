@@ -66,7 +66,7 @@
   window.WebSocket = FakeWS;
 
   const realFetch = window.fetch;
-  window.fetch = (u, o) => String(u).split('?')[0] === '/api/info' ? Promise.resolve(new Response(JSON.stringify({ name: 'CampusNet', needCode: false, maxMB: 100 }), { headers: { 'Content-Type': 'application/json' } })) : realFetch(u, o);
+  window.fetch = (u, o) => String(u).split('?')[0] === '/api/session' ? Promise.resolve(new Response('{"ok":true}', { headers: { 'Content-Type': 'application/json' } })) : String(u).split('?')[0] === '/api/info' ? Promise.resolve(new Response(JSON.stringify({ name: 'CampusNet', needCode: false, maxMB: 100 }), { headers: { 'Content-Type': 'application/json' } })) : realFetch(u, o);
 
   class FakeXHR {
     constructor() { this.upload = {}; this.status = 0; this.responseText = ''; }

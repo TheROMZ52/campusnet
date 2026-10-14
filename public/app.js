@@ -2,7 +2,7 @@
 /* CampusNet client. Protocol (unchanged): join/welcome, users, files, notices, msg, delmsg, dm, typing, status, admin, err. */
 const $ = s => document.querySelector(s);
 const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
-const st = { ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '' };
+const st = { ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '', loginAdm: '' };
 st.lat = []; st.t0 = 0;
 let chain = Promise.resolve();
 const key = c => c.k + ':' + c.id;
@@ -128,7 +128,7 @@ let reconnectTimer = 0, countdownTimer = 0;
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   st.ws = ws; if (!st.me) gateLog('[*] opening link...');
-  ws.onopen = () => { if (!st.me) gateLog('[*] authenticating...'); ws.send(JSON.stringify({ t: 'join', mode: st.mode, name: st.me || st.loginName, password: st.loginPw, code: st.loginCode, token: st.token })); };
+  ws.onopen = () => { if (!st.me) gateLog('[*] authenticating...'); ws.send(JSON.stringify({ t: 'join', mode: st.mode, name: st.me || st.loginName, password: st.loginPw, code: st.loginCode, token: st.token, adminCode: st.loginAdm })); };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => handle(m)).catch(err => console.error(err)); };
   ws.onerror = () => { if (!st.me) { gateLog('[-] link failed', 'bad'); setBusy(false); $('#loginErr').textContent = 'Cannot reach the server.'; } };
   ws.onclose = () => {
@@ -162,6 +162,7 @@ async function handle(m) {
     case 'welcome': {
       await setupKeys(m); const dmsDec = {}; for (const [o, arr] of Object.entries(m.dms || {})) { dmsDec[o] = []; for (const x of arr) dmsDec[o].push(await decDM(x, m.me)); }
       const first = !st.me; if (first) st.t0 = Date.now();
+      try { await fetch('/api/session', { method: 'POST', headers: { 'x-token': m.token } }); } catch { /* downloads need this cookie */ }
       st.me = m.me; st.token = m.token; sessionStorage.setItem('cn:token', m.token); st.admin = m.admin; st.mode = 'login';
       st.rooms = m.rooms; st.hist = m.hist; st.dms = dmsDec; st.notices = m.notices || []; st.files = m.files; st.maxMB = m.maxMB; setUsers(m.users, m.all);
       clearTimeout(reconnectTimer); clearInterval(countdownTimer); $('#linkbar').hidden = true;
@@ -177,15 +178,15 @@ async function handle(m) {
     case 'users': setUsers(m.users, m.all); renderUsers(); break;
     case 'files': { const added = m.files.length > st.files.length; st.files = m.files; renderFiles(); if (added && document.body.dataset.tab !== 'files') bump('tbFiles'); break; }
     case 'notices': { const more = m.notices.length > st.notices.length; st.notices = m.notices; if (st.cur.k === 'b') renderLog(); else if (more) { st.unread['b:board'] = (st.unread['b:board'] || 0) + 1; renderRooms(); tabBadges(); toast('New notice on the board', 'warn'); } break; }
-    case 'msg': (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
+    case 'msg': if ((st.hist[m.m.room] || []).some(x => x.id === m.m.id)) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
     case 'delmsg': { const a = st.hist[m.room]; if (a) { const i = a.findIndex(x => x.id === m.id); if (i >= 0) a.splice(i, 1); } const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
-    case 'dm': { const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other)) beep(); break; }
+    case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other)) beep(); break; }
     case 'key': { E2E.keys[m.name] = m.pub; delete E2E.shared[m.name]; delete E2E.state[m.name]; if (m.name !== st.me) CN.fingerprint(m.pub).then(fp => { const t = tofu[m.name]; if (t && t.fp !== fp) { E2E.state[m.name] = 'changed'; E2E.pending[m.name] = fp; toast('Safety number of ' + m.name + ' changed', 'warn', 7000); } emitUI('state'); e2eBadge(); }); break; }
     case 'typing': { const k = m.room ? 'r:' + m.room : 'd:' + m.from; (st.typing[k] = st.typing[k] || {})[m.from] = Date.now() + 4000; showTyping(); break; }
     case 'admin': st.admin = true; $('#meBar').textContent = st.me + ' \u00B7 admin'; toast('Admin mode enabled'); renderFiles(); renderLog(); break;
     case 'err':
       if (m.fatal) {
-        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = m.text; st.me = ''; try { st.ws.close(); } catch { /* ignore */ }
+        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = m.text; st.me = ''; if (m.need === 'adminCode') { $('#admRow').hidden = false; $('#admIn').focus(); } try { st.ws.close(); } catch { /* ignore */ }
         if (!$('#app').hidden) { $('#app').hidden = true; $('#login').hidden = false; $('#linkbar').hidden = true; }
         const g = $('.gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
       } else { local(m.text, true); toast(m.text, 'bad'); }
@@ -284,13 +285,13 @@ function renderFiles() {
   $('#sbFiles').textContent = st.files.length; $('#fcount').textContent = st.files.length ? st.files.length + ' file' + (st.files.length > 1 ? 's' : '') : '';
   if (!list.length) { const li = el('li'); li.style.cssText = 'cursor:default;border:0;background:none;justify-content:center'; li.append(emptyState('files', st.files.length ? 'No match' : 'Library is empty', st.files.length ? 'Try a different filter.' : 'Files shared by anyone on the network show up here.')); ul.append(li); return; }
   list.forEach(f => {
-    const li = el('li'), url = `/f/${f.id}?t=${encodeURIComponent(st.token)}`;
+    const li = el('li'), url = `/f/${f.id}`;
     li.append(el('span', 'ext', extOf(f.name)));
     const info = el('div', 'info'); info.append(el('div', 'fn', f.name), el('div', 'meta', `${fmt(f.size)} \u00B7 ${f.owner} \u00B7 ${ago(f.ts)}`)); li.append(info);
     const acts = el('div', 'acts'), a = el('a', 'icon-btn'); a.href = url; a.rel = 'noopener'; a.setAttribute('aria-label', 'Download ' + f.name); a.title = 'Download'; a.append(icon('dl')); acts.append(a);
     if (f.owner === st.me || st.admin) { const d = el('button', 'icon-btn bad'); d.append(icon('trash')); d.setAttribute('aria-label', 'Delete ' + f.name); d.title = 'Delete'; d.onclick = async () => { if (await ask({ title: 'Delete file', text: `"${f.name}" will be removed for everyone.`, ok: 'Delete', danger: true })) send({ t: 'delfile', id: f.id }); }; acts.append(d); }
     li.append(acts);
-    if (f.img) { const w = el('a', 'th'), i = el('img'); i.loading = 'lazy'; i.alt = 'Preview of ' + f.name; i.src = url + '&inline=1'; w.href = url + '&inline=1'; w.target = '_blank'; w.rel = 'noopener'; w.append(i); li.append(w); }
+    if (f.img) { const w = el('a', 'th'), i = el('img'); i.loading = 'lazy'; i.alt = 'Preview of ' + f.name; i.src = url + '?inline=1'; w.href = url + '?inline=1'; w.target = '_blank'; w.rel = 'noopener'; w.append(i); li.append(w); }
     ul.append(li);
   });
 }
@@ -375,20 +376,20 @@ function setMode(m) {
   $('#pw2Row').hidden = !up; $('#meter').hidden = !up; $('#loginErr').textContent = '';
   $('#goBtn .lbl').textContent = up ? 'Create account' : 'Connect';
   $('#pwIn').autocomplete = up ? 'new-password' : 'current-password';
-  $('#gateHint').textContent = up ? 'Pick a username and a password. Passwords are hashed on the server; there is no reset, so remember it.' : 'New here? Open the Register tab, pick a username and a password. That name becomes yours.';
+  $('#gateHint').textContent = up ? 'Pick a username and a password (8+ characters). Passwords are hashed on the server; there is no reset, so remember it.' : 'New here? Open the Register tab, pick a username and a password. That name becomes yours.';
 }
 $('#tabIn').onclick = () => setMode('login'); $('#tabUp').onclick = () => setMode('register');
 $('#pwShow').onclick = e => { const p = $('#pwIn'), show = p.type === 'password'; p.type = show ? 'text' : 'password'; e.target.textContent = show ? 'hide' : 'show'; e.target.setAttribute('aria-pressed', String(show)); };
-$('#pwIn').addEventListener('input', () => { const v = $('#pwIn').value; $('#meter').dataset.s = v.length < 4 ? 0 : 1 + (v.length >= 8) + (/[a-z]/.test(v) && /[A-Z]/.test(v) && /\d/.test(v)) + (/[^\w\s]/.test(v) && v.length >= 10); });
+$('#pwIn').addEventListener('input', () => { const v = $('#pwIn').value; $('#meter').dataset.s = v.length < 8 ? 0 : 1 + (v.length >= 12) + (/[a-z]/.test(v) && /[A-Z]/.test(v) && /\d/.test(v)) + (/[^\w\s]/.test(v) && v.length >= 12); });
 fetch('/api/info').then(r => r.json()).then(i => { $('#siteName').textContent = i.name; $('#codeRow').hidden = !i.needCode; document.title = i.name; }).catch(() => { $('#loginErr').textContent = 'Server unreachable.'; });
 $('#loginForm').onsubmit = e => {
   e.preventDefault(); const err = $('#loginErr'); err.textContent = '';
   const name = $('#nameIn').value.trim(), pw = $('#pwIn').value;
   const fail = t => { err.textContent = t; const g = $('.gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake'); };
   if (!/^[\p{L}\p{N}_.-]{2,20}$/u.test(name)) return fail('Username: 2-20 letters, digits, _ . or -');
-  if (pw.length < 4) return fail('Password must be at least 4 characters.');
+  if (pw.length < (st.mode === 'register' ? 8 : 4)) return fail(st.mode === 'register' ? 'Choose a password of at least 8 characters.' : 'Enter your password.');
   if (st.mode === 'register' && pw !== $('#pw2In').value) return fail('Passwords do not match.');
-  st.loginName = name; st.loginPw = pw; st.loginCode = $('#codeIn').value; st.me = ''; st.token = ''; setBusy(true); connect();
+  st.loginName = name; st.loginPw = pw; st.loginCode = $('#codeIn').value; st.loginAdm = $('#admIn').value; st.me = ''; st.token = ''; setBusy(true); connect();
 };
 $('#outBtn').onclick = async () => { if (await ask({ title: 'Sign out', text: 'You will leave the network. Your account stays.', ok: 'Sign out' })) { send({ t: 'bye' }); sessionStorage.removeItem('cn:token'); st.me = ''; st.token = ''; st.loginPw = ''; try { st.ws.close(); } catch { /* ignore */ } location.reload(); } };
 $('#statusSel').onchange = e => send({ t: 'status', status: e.target.value });

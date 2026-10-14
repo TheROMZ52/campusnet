@@ -29,10 +29,11 @@
     <form id="loginForm" autocomplete="off" novalidate>
       <label class="fld"><span>Username</span><input id="nameIn" maxlength="20" required spellcheck="false" autocapitalize="off" autocomplete="username" placeholder="2-20 chars: letters, digits, _ . -"></label>
       <label class="fld"><span>Password</span>
-        <span class="pw"><input id="pwIn" type="password" required maxlength="64" autocomplete="current-password" placeholder="min. 4 characters"><button type="button" id="pwShow" class="ghost" aria-label="Show password" aria-pressed="false">show</button></span>
+        <span class="pw"><input id="pwIn" type="password" required maxlength="64" autocomplete="current-password" placeholder="8+ characters for new accounts"><button type="button" id="pwShow" class="ghost" aria-label="Show password" aria-pressed="false">show</button></span>
       </label>
       <div id="meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></div>
       <label class="fld" id="pw2Row" hidden><span>Confirm password</span><input id="pw2In" type="password" maxlength="64" autocomplete="new-password"></label>
+      <label class="fld" id="admRow" hidden><span>Admin code</span><input id="admIn" type="password" autocomplete="off"></label>
       <label class="fld" id="codeRow" hidden><span>Access code</span><input id="codeIn" type="password" autocomplete="off"></label>
       <button class="btn primary lg" id="goBtn" type="submit"><span class="lbl">Connect</span><span class="spin" aria-hidden="true"></span></button>
       <pre id="gateLog" class="gatelog" aria-hidden="true"></pre>

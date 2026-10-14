@@ -1,5 +1,16 @@
 # Release notes
 
+## v0.6.0 (work in progress, branch wip/security-hardening) - security, persistence, tests
+- Fixed: one WebSocket message (`delmsg` with room `__proto__`) could crash the whole server
+- Fixed: anyone could register an ADMIN_USERS name first; now needs ADMIN_CODE. Reserved names (system, admin, ...) blocked
+- Downloads use an HttpOnly SameSite=Strict cookie (token no longer in URLs); sessions expire (absolute + idle) and logout revokes them
+- Upload quotas enforced while streaming, including concurrent uploads; per-user quota; stalled uploads cut; partial files cleaned
+- Atomic JSON writes with .bak fallback, corrupt files preserved, flush on SIGTERM; DMs (ciphertext only) now persist across restarts
+- Login: generic error (no account enumeration), per-name and per-IP throttling, scrypt cost raised with automatic hash upgrade on login, 8+ char passwords for new accounts
+- WebSocket: connection limit per IP, sign-in timeout, handler errors contained; `/healthz`, graceful shutdown, env validation, `.env.example`
+- `npm test`: 25 integration tests (node:test, no extra dependencies)
+- Not yet done: browser E2E scripts need updating for the new password rule; social features, groups, edit/reply/reactions, read receipts, notifications, terminal diagnostics review
+
 ## v0.5.0 - CampusNet OS desktop
 - Sign-in lands on an empty desktop: the wallpaper is the live topology of the nodes that are online (click a node to open its private chat)
 - Windows only open when you launch an app: Messages (channels and people live inside it), Network, Files, Board, Terminal, Monitor, Security, Settings
