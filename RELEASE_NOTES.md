@@ -1,6 +1,6 @@
 # Release notes
 
-## v0.6.0 (work in progress, branch wip/security-hardening) - security, persistence, tests
+## v0.6.0 - security, persistence, tests
 - Fixed: one WebSocket message (`delmsg` with room `__proto__`) could crash the whole server
 - Fixed: anyone could register an ADMIN_USERS name first; now needs ADMIN_CODE. Reserved names (system, admin, ...) blocked
 - Downloads use an HttpOnly SameSite=Strict cookie (token no longer in URLs); sessions expire (absolute + idle) and logout revokes them
@@ -9,7 +9,9 @@
 - Login: generic error (no account enumeration), per-name and per-IP throttling, scrypt cost raised with automatic hash upgrade on login, 8+ char passwords for new accounts
 - WebSocket: connection limit per IP, sign-in timeout, handler errors contained; `/healthz`, graceful shutdown, env validation, `.env.example`
 - `npm test`: 25 integration tests (node:test, no extra dependencies)
-- Not yet done: browser E2E scripts need updating for the new password rule; social features, groups, edit/reply/reactions, read receipts, notifications, terminal diagnostics review
+- `npm run test:e2e`: 7 real-browser tests (Playwright + Chromium): password rule, public chat without duplicates, E2E DM (no plaintext on server disk), cookie downloads with no token in URL, admin-code gate, reload/sign-out. Client changes (cookie downloads, admin code field, 8+ char passwords, dedupe) are now verified in a real browser
+- Added an empty favicon link (removes a 404 console error). README: Security + threat model, Backup and restore, Tests
+- Not yet done: social features, groups, edit/reply/reactions, read receipts, notifications, terminal diagnostics review, better key verification
 
 ## v0.5.0 - CampusNet OS desktop
 - Sign-in lands on an empty desktop: the wallpaper is the live topology of the nodes that are online (click a node to open its private chat)

@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/server.test.js"
+    "test": "node --test tests/server.test.js",
+    "test:e2e": "node --test tests/e2e/e2e.test.js"
   },
   "engines": {
     "node": ">=18"
@@ -13,5 +14,8 @@
   "dependencies": {
     "ws": "^8.18.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "playwright-core": "^1.56.0"
+  }
 }

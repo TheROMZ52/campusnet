@@ -75,11 +75,28 @@ docker run -d -p 3000:3000 -e ACCESS_CODE=secret -v campusnet-data:/data campusn
 ```
 Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client automatically uses `wss://` on HTTPS pages.
 
-## Security notes
-- Accounts are stored in `data/users.json` (scrypt hashes, no plain passwords). Five wrong passwords for a name from one IP locks that name for a minute. There is no password reset: delete the user from `data/users.json` while the server is stopped.
-- Anyone signed in can download any shared file. Do not share secrets. Set `ACCESS_CODE` when the server is public.
-- Files are served as downloads; only png/jpg/gif/webp can be previewed inline (sandboxed, SVG is never rendered). Names are sanitised, WebSocket origin is checked, messages are rate limited, and all text is inserted as plain text.
-- Use HTTPS when online, otherwise passwords travel unencrypted. Passwords reach the server at sign-in (it stores only scrypt hashes), so E2E protects against passive observers, not against a server operator who changes the code.
+## Security
+**Threat model.** CampusNet is built for a trusted-ish LAN or a small public server run by someone you know. It defends against: other users trying to crash the server, claim the admin name, read other people's files or DMs, exhaust disk space, or brute-force logins; and against passive network observers (when HTTPS is used). It does **not** defend against a malicious server operator (they serve the client code and receive your password at sign-in), a compromised browser or device, or traffic analysis (who talks to whom and when is visible to the server).
+
+What is in place:
+- **Accounts:** scrypt hashes (versioned, old hashes upgrade on login), 8+ character passwords for new accounts, generic login error (no account enumeration), per-name and per-IP throttling. No password reset: delete the user from `data/users.json` while the server is stopped.
+- **Admin:** names listed in `ADMIN_USERS` can only be registered with `ADMIN_CODE` (the server refuses to start with `ADMIN_USERS` but no `ADMIN_CODE`). Names like `system` and `admin` are reserved.
+- **Sessions:** random tokens, absolute (`SESSION_HOURS`) and idle (`SESSION_IDLE_HOURS`) expiry, revoked on sign-out. Sessions live in server memory, so a restart signs everyone out.
+- **Downloads:** served with an HttpOnly, SameSite=Strict cookie, so the token is never in a URL. Files are sent as downloads; only png/jpg/gif/webp preview inline (SVG is never rendered).
+- **Uploads:** size and per-user and total quotas are enforced while streaming (also for concurrent uploads), stalled uploads are cut, partial files are removed.
+- **Server robustness:** WebSocket origin check, per-IP connection limit, sign-in timeout, message rate limit, handler errors contained, `/healthz`, graceful shutdown (data flushed on SIGTERM).
+- **Direct messages:** end-to-end encrypted in the browser (ECDH P-256 + AES-GCM). The private key is stored locked with your password. The server stores and forwards ciphertext only. Keys are trusted on first use (TOFU); compare the safety number in Security to verify a contact. Public rooms, the board and files are **not** end-to-end encrypted.
+- Anyone signed in can download any shared file. Set `ACCESS_CODE` when the server is public and do not share secrets in files.
+- Use HTTPS when online, otherwise passwords travel unencrypted.
+
+## Backup and restore
+All state is in `DATA_DIR` (default `./data`): `users.json`, `messages.json`, `dms.json` (ciphertext), `notices.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
+- **Backup:** stop the server (or use a filesystem snapshot), then copy the whole `DATA_DIR`. Copying while it runs can capture `files.json` and `uploads/` at slightly different moments.
+- **Restore:** stop the server, replace `DATA_DIR` with the backup, start it again. If a JSON file is corrupt the server falls back to its `.bak` and keeps the corrupt file for inspection.
+- Back up `users.json` together with `dms.json`: DMs can only be read with the users' passwords, which unlock their keys.
+
+## Tests
+`npm test` runs the server integration tests (no browser). `npm run test:e2e` drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |
