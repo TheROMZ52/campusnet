@@ -1,5 +1,15 @@
 # Release notes
 
+## v0.7.0 - messaging and social
+- Messages: reply (server-built quote in channels, encrypted inside DMs), edit own, delete own DMs, emoji reactions (6 allowed), pinned channel messages (admin), per-conversation mute
+- Read receipts (can be turned off), persistent unread counts stored per conversation on the server
+- Profiles (display name, bio, 64x64 avatar), user search, follow/unfollow, block (DMs refused both ways, hidden from search/feed/lists)
+- Real feed: posts, Everyone/Following, cursor pagination (20 per page), likes, delete; Alerts for follows, likes, reactions, replies, mentions
+- New desktop windows: People, Feed, Alerts (also work from the Apps menu on small screens)
+- Server: new protocol messages `edit`, `deldm`, `react`, `pin`, `read`, `mute`, `profile`, `search`, `follow`, `block`, `post`, `feed`, `like`, `delpost`, `notifread`; new files `posts.json`, `notifs.json`; all inputs validated, avatars limited to small png/jpeg/webp data URLs
+- Tests: `npm test` now 39 (14 new for messaging/social/persistence), `npm run test:e2e` 13 (6 new real-browser flows incl. checks that profile and post text is never rendered as HTML)
+- Not done yet: groups and communities with roles, terminal command review/diagnostics, QR / side-by-side key verification, hiding blocked users' channel messages is client-side only
+
 ## v0.6.0 - security, persistence, tests
 - Fixed: one WebSocket message (`delmsg` with room `__proto__`) could crash the whole server
 - Fixed: anyone could register an ADMIN_USERS name first; now needs ADMIN_CODE. Reserved names (system, admin, ...) blocked

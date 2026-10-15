@@ -74,9 +74,11 @@
       </section>
 
     <section id="center" class="panel">
-      <div class="ph split"><span id="convTitle"></span><span id="e2e" class="e2e" hidden></span><input id="find" type="search" placeholder="find" aria-label="Find in chat"></div>
+      <div class="ph split"><span id="convTitle"></span><span id="e2e" class="e2e" hidden></span><button id="muteBtn" class="mute" type="button" hidden></button><input id="find" type="search" placeholder="find" aria-label="Find in chat"></div>
+      <div id="pinBar" hidden></div>
       <div id="log" role="log" aria-live="polite"></div>
       <div id="typing" aria-live="polite"></div>
+      <div id="replyBar" hidden></div>
       <form id="form" autocomplete="off">
         <button class="icon-btn" id="attach" type="button" aria-label="Attach files" title="Attach files"></button>
         <span class="prompt" aria-hidden="true">&gt;</span>
@@ -142,6 +144,7 @@
 <script src="crypto.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
+<script src="social.js"></script>
 <script src="shell.js"></script>
 </body>
 </html>

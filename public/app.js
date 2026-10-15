@@ -2,7 +2,7 @@
 /* CampusNet client. Protocol (unchanged): join/welcome, users, files, notices, msg, delmsg, dm, typing, status, admin, err. */
 const $ = s => document.querySelector(s);
 const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
-const st = { ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '', loginAdm: '' };
+const st = { prefs: { following: [], blocked: [], muted: [], reads: {}, receipts: true }, profiles: {}, myProfile: { d: '', b: '', a: '' }, notifs: [], peerReads: {}, reply: null, editing: null, ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '', loginAdm: '' };
 st.lat = []; st.t0 = 0;
 let chain = Promise.resolve();
 const key = c => c.k + ':' + c.id;
@@ -106,12 +106,12 @@ async function sharedFor(name) {
 async function decDM(m, me = st.me) {
   if (!m.enc) return Object.assign({}, m, { text: '[unencrypted message blocked]', kind: 'sys' });
   const other = m.from === me ? m.to : m.from;
-  try { const p = await CN.decrypt(await sharedFor(other), m.from, m.to, m.enc); return Object.assign({}, m, { text: String(p.text || ''), kind: p.kind === 'me' ? 'me' : 'chat', e2e: true }); }
+  try { const p = await CN.decrypt(await sharedFor(other), m.from, m.to, m.enc); return Object.assign({}, m, { text: String(p.text || ''), kind: p.kind === 'me' ? 'me' : 'chat', reply: cleanReply(p.reply), e2e: true }); }
   catch { return Object.assign({}, m, { text: '[encrypted message: cannot decrypt]', kind: 'sys' }); }
 }
-async function sendDM(to, text, kind) {
+async function sendDM(to, text, kind, reply) {
   const c = canon(to); if (!c) { toast('No user named "' + to + '"', 'bad'); return; }
-  try { const k = await sharedFor(c); send({ t: 'dm', to: c, enc: await CN.encrypt(k, st.me, c, { text, kind: kind === 'me' ? 'me' : 'chat' }) }); }
+  try { const k = await sharedFor(c); send({ t: 'dm', to: c, enc: await CN.encrypt(k, st.me, c, { text, kind: kind === 'me' ? 'me' : 'chat', reply }) }); }
   catch (e) { const t = e.message || 'Cannot send encrypted message'; local(t, true); toast(t, 'bad', 6000); }
 }
 function e2eBadge() {
@@ -165,12 +165,13 @@ async function handle(m) {
       try { await fetch('/api/session', { method: 'POST', headers: { 'x-token': m.token } }); } catch { /* downloads need this cookie */ }
       st.me = m.me; st.token = m.token; sessionStorage.setItem('cn:token', m.token); st.admin = m.admin; st.mode = 'login';
       st.rooms = m.rooms; st.hist = m.hist; st.dms = dmsDec; st.notices = m.notices || []; st.files = m.files; st.maxMB = m.maxMB; setUsers(m.users, m.all);
+      st.prefs = Object.assign({ following: [], blocked: [], muted: [], reads: {}, receipts: true }, m.prefs || {}); st.profiles = m.profiles || {}; st.myProfile = m.myProfile || { d: '', b: '', a: '' }; st.notifs = m.notifs || []; st.peerReads = m.peerReads || {}; st.reply = null; st.editing = null; initUnread();
       clearTimeout(reconnectTimer); clearInterval(countdownTimer); $('#linkbar').hidden = true;
       if (st.retry) toast('Link restored', 'ok', 2200); st.retry = 0;
       gateLog('[+] access granted', 'ok'); setBusy(false); $('#login').hidden = true; $('#app').hidden = false;
       $('#siteBar').textContent = m.site; document.title = m.site; $('#meBar').textContent = m.me + (m.admin ? ' \u00B7 admin' : ''); $('#meAv').textContent = m.me[0];
       $('#limit').textContent = 'Up to ' + m.maxMB + ' MB per file'; $('#sbMax').textContent = m.maxMB + ' MB';
-      setLink('online', 'ok'); renderAll(); viz(); if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
+      setLink('online', 'ok'); renderAll(); renderReplyBar(); markRead(); viz(); if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
       if (first) local('Welcome, ' + m.me + '. Type /help for commands.');
       emitUI('welcome');
       break;
@@ -178,10 +179,17 @@ async function handle(m) {
     case 'users': setUsers(m.users, m.all); renderUsers(); break;
     case 'files': { const added = m.files.length > st.files.length; st.files = m.files; renderFiles(); if (added && document.body.dataset.tab !== 'files') bump('tbFiles'); break; }
     case 'notices': { const more = m.notices.length > st.notices.length; st.notices = m.notices; if (st.cur.k === 'b') renderLog(); else if (more) { st.unread['b:board'] = (st.unread['b:board'] || 0) + 1; renderRooms(); tabBadges(); toast('New notice on the board', 'warn'); } break; }
-    case 'msg': if ((st.hist[m.m.room] || []).some(x => x.id === m.m.id)) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
+    case 'msg': if ((st.hist[m.m.room] || []).some(x => x.id === m.m.id) || (m.m.kind !== 'sys' && isBlocked(m.m.from))) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
     case 'delmsg': { const a = st.hist[m.room]; if (a) { const i = a.findIndex(x => x.id === m.id); if (i >= 0) a.splice(i, 1); } const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
-    case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other)) beep(); break; }
+    case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other) && !isMuted('d:' + other)) beep(); break; }
     case 'key': { E2E.keys[m.name] = m.pub; delete E2E.shared[m.name]; delete E2E.state[m.name]; if (m.name !== st.me) CN.fingerprint(m.pub).then(fp => { const t = tofu[m.name]; if (t && t.fp !== fp) { E2E.state[m.name] = 'changed'; E2E.pending[m.name] = fp; toast('Safety number of ' + m.name + ' changed', 'warn', 7000); } emitUI('state'); e2eBadge(); }); break; }
+    case 'upd': { const a = st.hist[m.room], i = a ? a.findIndex(x => x.id === m.m.id) : -1; if (i >= 0) a[i] = m.m; if (st.cur.k === 'r' && st.cur.id === m.room) { updateRow(m.m); renderPins(); } break; }
+    case 'dmupd': { const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from, a = st.dms[other], i = a ? a.findIndex(x => x.id === dm.id) : -1; if (i >= 0) a[i] = dm; if (st.cur.k === 'd' && same(st.cur.id, other)) updateRow(dm); break; }
+    case 'dmdel': { const other = same(m.a, st.me) ? m.b : m.a, a = st.dms[other], i = a ? a.findIndex(x => x.id === m.id) : -1; if (i >= 0) a.splice(i, 1); const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
+    case 'receipt': { st.peerReads[m.from] = m.ts; document.querySelectorAll('#log .rc').forEach(r => { if (same(r.dataset.peer, m.from) && +r.dataset.ts <= m.ts) { r.classList.add('seen'); r.textContent = ' \u2713\u2713'; r.title = 'Seen'; } }); break; }
+    case 'prefs': { const { t, ...rest } = m; Object.assign(st.prefs, rest); renderRooms(); renderUsers(); updMute(); tabBadges(); break; }
+    case 'profile': { st.profiles[m.name] = m.p; if (m.name === st.me) st.myProfile = m.p; renderUsers(); break; }
+    case 'notif': { st.notifs.unshift(m.n); if (!(m.n.conv && isMuted(m.n.conv))) toast(notifText(m.n), 'ok', 4200); break; }
     case 'typing': { const k = m.room ? 'r:' + m.room : 'd:' + m.from; (st.typing[k] = st.typing[k] || {})[m.from] = Date.now() + 4000; showTyping(); break; }
     case 'admin': st.admin = true; $('#meBar').textContent = st.me + ' \u00B7 admin'; toast('Admin mode enabled'); renderFiles(); renderLog(); break;
     case 'err':
@@ -192,14 +200,15 @@ async function handle(m) {
       } else { local(m.text, true); toast(m.text, 'bad'); }
       break;
   }
+  if (typeof Social !== 'undefined' && /^(prefs|profile|notif|results|feed|post|plike|pdel)$/.test(m.t)) Social.onMsg(m);
   emitUI('state');
 }
 function incoming(k, msg, from) {
   if (window.NetViz && from !== st.me) NetViz.pulse(msg.kind === 'sys' ? '' : from);
   const mention = msg.kind !== 'sys' && from !== st.me && new RegExp('@' + st.me.replace(/\./g, '\\.') + '(?![\\p{L}\\p{N}_.-])', 'iu').test(msg.text || '');
-  if (key(st.cur) === k) { const stick = nearBottom(); addRow(msg); if (stick) scrollEnd(); }
-  else if (from !== st.me && msg.kind !== 'sys') { st.unread[k] = (st.unread[k] || 0) + 1; renderRooms(); renderUsers(); tabBadges(); }
-  if (mention && (document.hidden || key(st.cur) !== k)) beep(880);
+  if (key(st.cur) === k) { const stick = nearBottom(); addRow(msg); if (stick) scrollEnd(); markRead(); }
+  else if (from !== st.me && msg.kind !== 'sys' && !isMuted(k)) { st.unread[k] = (st.unread[k] || 0) + 1; renderRooms(); renderUsers(); tabBadges(); }
+  if (mention && (document.hidden || key(st.cur) !== k) && !isMuted(k)) beep(880);
   updateTitle();
 }
 function updateTitle() { const n = Object.values(st.unread).reduce((a, b) => a + b, 0); document.title = (n ? `(${n}) ` : '') + $('#siteBar').textContent; }
@@ -223,9 +232,8 @@ $('#inp').addEventListener('input', () => {
 /* ---------- rendering ---------- */
 const nearBottom = () => { const l = $('#log'); return l.scrollHeight - l.scrollTop - l.clientHeight < 90; };
 const scrollEnd = () => { const l = $('#log'); l.scrollTo({ top: l.scrollHeight, behavior: 'auto' }); };
-function addRow(m, cls) {
-  const e0 = $('#log .empty'); if (e0) e0.remove();
-  const r = el('div', 'msg' + (m.kind === 'sys' ? ' sys' : '') + (cls ? ' ' + cls : '') + (m.to ? ' dm' : '') + (m.from === st.me ? ' own' : '')); if (m.id) r.dataset.id = m.id;
+function mkRow(m, cls) {
+  const r = el('div', 'msg' + (m.kind === 'sys' ? ' sys' : '') + (cls ? ' ' + cls : '') + (m.to ? ' dm' : '') + (m.from === st.me ? ' own' : '') + (m.pinned ? ' pinned' : '')); if (m.id) r.dataset.id = m.id;
   r.append(el('span', 't', hhmm(m.ts || Date.now())));
   if (m.kind === 'sys') { const b = el('span', 'b', m.text); r.dataset.tag = /disconnected|signed out|left\b/i.test(m.text) ? '[-]' : /connected|shared|restored|welcome/i.test(m.text) ? '[+]' : cls === 'err' ? '[!]' : '[*]'; b.dataset.tag = r.dataset.tag; r.append(b); }
   else {
@@ -233,10 +241,77 @@ function addRow(m, cls) {
     if (mention && m.from !== st.me) r.classList.add('mention');
     if (m.kind === 'me') { r.append(el('span', 'w', '*'), (() => { body.prepend(m.from + ' '); return body; })()); }
     else { const w = el('span', 'w', m.from); w.style.color = color(m.from); r.append(w, body); }
-    if (m.room && (m.from === st.me || st.admin)) { const x = el('button', 'x'); x.append(icon('x')); x.setAttribute('aria-label', 'Delete message'); x.title = 'Delete message'; x.onclick = () => send({ t: 'delmsg', room: m.room, id: m.id }); r.append(x); }
+    if (m.reply) { const q = el('div', 'rq'); q.append(el('b', null, m.reply.from), ' ' + m.reply.text); q.onclick = () => jumpTo(m.reply.id); body.prepend(q); }
+    if (m.edited) body.append(el('small', 'ed', ' (edited)'));
+    if (m.to && m.from === st.me) { const seen = (st.peerReads[m.to] || 0) >= m.ts, rc = el('small', 'rc' + (seen ? ' seen' : ''), seen ? ' \u2713\u2713' : ' \u2713'); rc.dataset.peer = m.to; rc.dataset.ts = m.ts; rc.title = seen ? 'Seen' : 'Sent'; body.append(rc); }
+    if (m.reactions) { const rx = el('div', 'rx'); Object.entries(m.reactions).forEach(([e, who]) => { const c = el('button', 'rxc' + (who.includes(st.me) ? ' me' : ''), e + ' ' + who.length); c.type = 'button'; c.title = who.join(', '); c.onclick = () => send(Object.assign({ t: 'react', id: m.id, emoji: e }, convRef(m))); rx.append(c); }); body.append(rx); }
+    if (m.id) r.append(rowActions(m));
   }
-  $('#log').append(r); applyFind(r);
+  return r;
 }
+function addRow(m, cls) { const e0 = $('#log .empty'); if (e0) e0.remove(); const r = mkRow(m, cls); $('#log').append(r); applyFind(r); }
+function updateRow(m) { const old = document.querySelector(`#log .msg[data-id="${CSS.escape(m.id)}"]`); if (old) { const r = mkRow(m); old.replaceWith(r); applyFind(r); } }
+const REACTS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83C\uDF89'];
+const snip = t => String(t || '').replace(/\s+/g, ' ').slice(0, 80);
+const convRef = m => m.room ? { room: m.room } : { to: m.from === st.me ? m.to : m.from };
+const cleanReply = r => (r && typeof r === 'object' && typeof r.text === 'string') ? { id: String(r.id || '').slice(0, 24), from: String(r.from || '').slice(0, 40), text: snip(r.text) } : undefined;
+const isBlocked = n => st.prefs.blocked.includes(String(n).toLowerCase());
+const isMuted = k => st.prefs.muted.includes(String(k).toLowerCase());
+function notifText(n) { const t = { follow: 'started following you', like: 'liked your post', react: 'reacted ' + n.text, reply: 'replied: ' + n.text, mention: 'mentioned you: ' + n.text }[n.type]; return n.from + ' ' + (t || n.text || ''); }
+function rowActions(m) {
+  const box = el('span', 'ra'), add = (txt, label, fn) => { const b = el('button', 'ra-b', txt); b.type = 'button'; b.setAttribute('aria-label', label); b.title = label; b.onclick = e => { e.stopPropagation(); fn(b); }; box.append(b); };
+  add('\u21A9', 'Reply', () => startReply(m)); add('\u263A', 'React', b => reactPicker(m, b));
+  if (m.from === st.me) add('\u270E', 'Edit message', () => startEdit(m));
+  if (m.room && st.admin) add(m.pinned ? '\u25C6' : '\u25C7', m.pinned ? 'Unpin message' : 'Pin message', () => send({ t: 'pin', room: m.room, id: m.id, on: !m.pinned }));
+  if (m.from === st.me || (m.room && st.admin)) add('\u00D7', 'Delete message', () => send(m.room ? { t: 'delmsg', room: m.room, id: m.id } : { t: 'deldm', to: m.to === st.me ? m.from : m.to, id: m.id }));
+  return box;
+}
+function reactPicker(m, anchor) {
+  const old = document.querySelector('.rpick'); if (old) { const same = old.parentNode === anchor.closest('.msg'); old.remove(); if (same) return; }
+  const p = el('div', 'rpick'); REACTS.forEach(e => { const b = el('button', null, e); b.type = 'button'; b.onclick = ev => { ev.stopPropagation(); send(Object.assign({ t: 'react', id: m.id, emoji: e }, convRef(m))); p.remove(); }; p.append(b); });
+  anchor.closest('.msg').append(p);
+}
+document.addEventListener('click', e => { if (!e.target.closest('.rpick')) document.querySelectorAll('.rpick').forEach(x => x.remove()); });
+function jumpTo(id) { const r = document.querySelector(`#log .msg[data-id="${CSS.escape(id)}"]`); if (!r) { toast('That message is not loaded', 'warn'); return; } r.scrollIntoView({ block: 'center' }); r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash'); }
+function startReply(m) { st.editing = null; st.reply = { id: m.id, from: m.from, text: snip(m.text) }; renderReplyBar(); $('#inp').focus(); }
+function startEdit(m) { st.reply = null; st.editing = { m }; $('#inp').value = m.text; renderReplyBar(); $('#inp').focus(); }
+function renderReplyBar() {
+  const bar = $('#replyBar'); if (!bar) return; bar.replaceChildren();
+  bar.hidden = !st.reply && !st.editing; if (bar.hidden) return;
+  bar.append(el('span', 'rl', st.editing ? 'Editing message' : 'Replying to ' + st.reply.from + ': ' + st.reply.text));
+  const x = el('button', 'ra-b', '\u00D7'); x.type = 'button'; x.setAttribute('aria-label', 'Cancel'); x.onclick = cancelCompose; bar.append(x);
+}
+function cancelCompose() { if (st.editing) $('#inp').value = ''; st.reply = null; st.editing = null; renderReplyBar(); }
+async function finishEdit(text) {
+  const m = st.editing.m; st.editing = null; renderReplyBar(); if (!text || text === m.text) return;
+  if (m.room) return send({ t: 'edit', room: m.room, id: m.id, text });
+  const other = m.to === st.me ? m.from : m.to;
+  try { const k = await sharedFor(other); send({ t: 'edit', to: other, id: m.id, enc: await CN.encrypt(k, st.me, other, { text, kind: m.kind === 'me' ? 'me' : 'chat', reply: m.reply }) }); } catch (e) { toast(e.message || 'Edit failed', 'bad'); }
+}
+function renderPins() {
+  const bar = $('#pinBar'); if (!bar) return; const pins = st.cur.k === 'r' ? (st.hist[st.cur.id] || []).filter(x => x.pinned) : [];
+  bar.hidden = !pins.length; bar.replaceChildren();
+  pins.forEach(p => { const b = el('button', 'pin'); b.type = 'button'; b.append(el('span', 'pg', '\u25C6'), el('b', null, p.from), ' ' + snip(p.text)); b.onclick = () => jumpTo(p.id); bar.append(b); });
+}
+function updMute() { const b = $('#muteBtn'); if (!b) return; b.hidden = st.cur.k === 'b'; if (b.hidden) return; const m = isMuted(key(st.cur)); b.textContent = m ? '[muted]' : '[mute]'; b.classList.toggle('on', m); b.title = m ? 'Unmute this conversation' : 'Mute notifications for this conversation'; }
+$('#muteBtn').onclick = () => { const k = key(st.cur).toLowerCase(), on = !isMuted(k); if (on) delete st.unread[key(st.cur)]; send({ t: 'mute', k, on }); };
+$('#inp').addEventListener('keydown', e => { if (e.key === 'Escape' && (st.reply || st.editing)) cancelCompose(); });
+/* persistent unread: counted from the server-stored "read up to" timestamp of each conversation */
+function initUnread() {
+  st.unread = {}; const rd = st.prefs.reads;
+  Object.entries(st.hist).forEach(([r, a]) => { const base = rd['r:' + r]; if (base == null || isMuted('r:' + r)) return; const n = a.filter(x => x.ts > base && x.from !== st.me && x.kind !== 'sys' && !isBlocked(x.from)).length; if (n) st.unread['r:' + r] = n; });
+  Object.entries(st.dms).forEach(([o, a]) => { if (isMuted('d:' + o)) return; const base = rd['d:' + o.toLowerCase()] || 0, n = a.filter(x => x.ts > base && x.from !== st.me && x.kind !== 'sys').length; if (n) st.unread['d:' + o] = n; });
+}
+let readT = 0;
+function markRead() {
+  clearTimeout(readT); readT = setTimeout(() => {
+    if (document.hidden || $('#app').hidden || st.cur.k === 'b') return;
+    const list = (st.cur.k === 'r' ? st.hist[st.cur.id] : st.dms[st.cur.id]) || [], last = list.filter(x => x.kind !== 'sys').pop(); if (!last) return;
+    const k = key(st.cur).toLowerCase(); if ((st.prefs.reads[k] || 0) >= last.ts) return; st.prefs.reads[k] = last.ts; send({ t: 'read', k, ts: last.ts });
+  }, 400);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) markRead(); });
+
 function local(text, bad) { addRow({ kind: 'sys', text, ts: Date.now() }, bad ? 'err' : 'local'); scrollEnd(); }
 function renderLog() {
   const log = $('#log'); log.replaceChildren();
@@ -255,7 +330,7 @@ function renderLog() {
   const list = st.cur.k === 'r' ? (st.hist[st.cur.id] || []) : (st.dms[st.cur.id] || []);
   $('#convTitle').textContent = st.cur.k === 'r' ? '# ' + st.cur.id : 'private \u00B7 ' + st.cur.id;
   if (!list.length) log.append(emptyState('radar', 'Quiet on this channel', st.cur.k === 'r' ? 'No transmissions yet. Say something.' : 'End-to-end encrypted: only you and ' + st.cur.id + ' can read this.'));
-  list.forEach(m => addRow(m)); scrollEnd(); showTyping();
+  list.filter(m => m.kind === 'sys' || !isBlocked(m.from)).forEach(m => addRow(m)); scrollEnd(); showTyping();
 }
 function applyFind(row) { const q = $('#find').value.trim().toLowerCase(); (row ? [row] : document.querySelectorAll('#log .msg')).forEach(r => { r.hidden = !!q && !r.textContent.toLowerCase().includes(q); }); }
 $('#find').addEventListener('input', () => applyFind());
@@ -271,10 +346,11 @@ function renderRooms() {
 function renderUsers() {
   const ul = $('#users'); ul.replaceChildren(); $('#ucount').textContent = st.users.length + ' online'; $('#sbNodes').textContent = st.users.length;
   const names = new Set([...st.users, ...st.all, ...Object.keys(st.dms)]);
-  [...names].sort((a, b) => (st.users.includes(b) - st.users.includes(a)) || a.localeCompare(b)).forEach(n => {
+  [...names].filter(n => !isBlocked(n)).sort((a, b) => (st.users.includes(b) - st.users.includes(a)) || a.localeCompare(b)).forEach(n => {
     const live = st.users.includes(n), s = live ? (st.status[n] || 'online') : 'off', led = el('span', 'led ' + (s === 'online' ? 'ok' : s === 'away' ? 'warn' : s === 'busy' ? 'bad' : ''));
     const li = item(key(st.cur) === 'd:' + n, led, n + (n === st.me ? ' (you)' : ''), st.unread['d:' + n], n === st.me ? null : () => open('d', n), live && s !== 'online' ? el('small', null, s) : null);
     if (!live) li.classList.add('off'); if (n === st.me) li.classList.add('self');
+    const pr = st.profiles[n]; if (pr && pr.d) { li.querySelector('.n').append(el('small', 'dn', ' ' + pr.d)); li.title = pr.b || pr.d; }
     ul.append(li);
   });
 }
@@ -296,18 +372,21 @@ function renderFiles() {
   });
 }
 $('#ffind').addEventListener('input', renderFiles);
-function renderAll() { renderRooms(); renderUsers(); renderFiles(); renderLog(); tabBadges(); }
-function open(k, id) { st.cur = { k, id }; delete st.unread[k === 'b' ? 'b:board' : key(st.cur)]; $('#find').value = ''; renderAll(); updateTitle(); setTab('chat'); if (!$('#form').hidden && !matchMedia('(pointer:coarse)').matches) $('#inp').focus(); }
+function renderAll() { renderRooms(); renderUsers(); renderFiles(); renderLog(); renderPins(); updMute(); tabBadges(); }
+function open(k, id) { st.cur = { k, id }; delete st.unread[k === 'b' ? 'b:board' : key(st.cur)]; $('#find').value = ''; st.reply = null; st.editing = null; renderReplyBar(); renderAll(); markRead(); updateTitle(); setTab('chat'); if (!$('#form').hidden && !matchMedia('(pointer:coarse)').matches) $('#inp').focus(); }
 
 /* ---------- input & commands ---------- */
 $('#form').onsubmit = e => {
   e.preventDefault();
-  const inp = $('#inp'), text = inp.value.trim(); if (!text) return; inp.value = '';
+  const inp = $('#inp'), text = inp.value.trim(); if (st.editing) { inp.value = ''; return finishEdit(text); } if (!text) return; inp.value = '';
   if (st.cur.k === 'b') return send({ t: 'notice', text });
   if (text[0] === '/') return command(text);
   say(text, 'chat');
 };
-function say(text, kind) { if (st.cur.k === 'r') send({ t: 'msg', room: st.cur.id, text, kind }); else sendDM(st.cur.id, text, kind); }
+function say(text, kind) {
+  const reply = st.reply && kind !== 'me' ? { id: st.reply.id, from: st.reply.from, text: st.reply.text } : undefined; st.reply = null; renderReplyBar();
+  if (st.cur.k === 'r') send({ t: 'msg', room: st.cur.id, text, kind, reply: reply && reply.id }); else sendDM(st.cur.id, text, kind, reply);
+}
 function command(line) {
   const [cmd, ...rest] = line.slice(1).split(' '), arg = rest.join(' ').trim();
   switch (cmd.toLowerCase()) {

@@ -1,12 +1,12 @@
 {
   "name": "campusnet",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A tiny campus-style intranet: public/private chat, file sharing and a live online list. Runs on a LAN or online.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/server.test.js",
-    "test:e2e": "node --test tests/e2e/e2e.test.js"
+    "test": "node --test tests/server.test.js tests/social.test.js",
+    "test:e2e": "node --test tests/e2e/e2e.test.js tests/e2e/features.test.js"
   },
   "engines": {
     "node": ">=18"

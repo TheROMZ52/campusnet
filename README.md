@@ -27,6 +27,14 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Messaging and social (v0.7)
+- **Messages:** reply, edit (own), delete (own; admins can delete channel messages), emoji reactions, pinned channel messages (admins, max 5 per channel), per-conversation mute. Hover a message (always visible on touch screens) for its actions. `Esc` cancels reply/edit. Replies and edits in direct messages are encrypted like the message itself.
+- **Read receipts and unread:** each conversation stores a "read up to" time on the server, so unread badges survive reloads and other devices. Direct messages show a check mark when sent and two when the other person has read them. You can turn receipts off in People > Your profile (then you neither send nor see them).
+- **People:** display name, bio and a small avatar (resized in the browser to 64x64), search by name, follow/unfollow and block. Blocking stops direct messages both ways, removes follows and hides the person from your lists, search and feed.
+- **Feed:** posts up to 500 characters from everyone or only people you follow, newest first, 20 per page with "Load more", likes, delete own posts.
+- **Alerts:** follows, likes, reactions, replies and @mentions, stored on the server until you read them.
+- Channels, the feed, profiles and reactions are **not** end-to-end encrypted. Reactions on direct messages are visible to the server (which emoji, by whom), the message text is not.
+
 ## Encrypted direct messages
 Direct messages are encrypted in your browser with ECDH (P-256) + AES-256-GCM (Web Crypto, no dependencies). Each account has a key pair created on first sign-in; the private key is wrapped with a key derived from your password (PBKDF2) and stored on the server only as an opaque blob, so you can sign in from any device. The server relays ciphertext and rejects plaintext DMs.
 
@@ -86,17 +94,18 @@ What is in place:
 - **Uploads:** size and per-user and total quotas are enforced while streaming (also for concurrent uploads), stalled uploads are cut, partial files are removed.
 - **Server robustness:** WebSocket origin check, per-IP connection limit, sign-in timeout, message rate limit, handler errors contained, `/healthz`, graceful shutdown (data flushed on SIGTERM).
 - **Direct messages:** end-to-end encrypted in the browser (ECDH P-256 + AES-GCM). The private key is stored locked with your password. The server stores and forwards ciphertext only. Keys are trusted on first use (TOFU); compare the safety number in Security to verify a contact. Public rooms, the board and files are **not** end-to-end encrypted.
+- **Social data:** profiles, posts, follows, blocks, read positions and notifications are stored in plain JSON on the server and visible to the operator. Avatars are accepted only as small png/jpeg/webp data URLs (never SVG). All user text is inserted as plain text, never as HTML. Blocks are enforced on the server for direct messages and feed; hiding blocked people's channel messages is done in your browser.
 - Anyone signed in can download any shared file. Set `ACCESS_CODE` when the server is public and do not share secrets in files.
 - Use HTTPS when online, otherwise passwords travel unencrypted.
 
 ## Backup and restore
-All state is in `DATA_DIR` (default `./data`): `users.json`, `messages.json`, `dms.json` (ciphertext), `notices.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
+All state is in `DATA_DIR` (default `./data`): `users.json` (accounts, profiles, follows, blocks, read positions, mutes), `messages.json`, `dms.json` (ciphertext), `notices.json`, `posts.json`, `notifs.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
 - **Backup:** stop the server (or use a filesystem snapshot), then copy the whole `DATA_DIR`. Copying while it runs can capture `files.json` and `uploads/` at slightly different moments.
 - **Restore:** stop the server, replace `DATA_DIR` with the backup, start it again. If a JSON file is corrupt the server falls back to its `.bak` and keeps the corrupt file for inspection.
 - Back up `users.json` together with `dms.json`: DMs can only be read with the users' passwords, which unlock their keys.
 
 ## Tests
-`npm test` runs the server integration tests (no browser). `npm run test:e2e` drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (39, no browser). `npm run test:e2e` (13 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

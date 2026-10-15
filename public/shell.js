@@ -12,6 +12,9 @@
     terminal: { title: 'Terminal', ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
     nodes: { title: 'Network', ic: 'nodes', cat: 'Network', sel: '#pNodes', tab: 'rooms' },
     files: { title: 'Files', ic: 'files', cat: 'Network', sel: '#right', tab: 'files' },
+    people: { title: 'People', ic: 'nodes', cat: 'Network', w: 460, h: 520, build: b => Social.people(b) },
+    feed: { title: 'Feed', ic: 'board', cat: 'Network', w: 460, h: 520, build: b => Social.feed(b) },
+    alerts: { title: 'Alerts', ic: 'radar', cat: 'Network', w: 420, h: 420, build: b => Social.alerts(b) },
     monitor: { title: 'Monitor', ic: 'monitor', cat: 'System', w: 460, h: 400, build: buildMonitor },
     security: { title: 'Security', ic: 'shield', cat: 'System', w: 540, h: 460, build: buildSecurity },
     settings: { title: 'Settings', ic: 'gear', cat: 'System', w: 440, h: 420, build: buildSettings }

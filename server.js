@@ -89,6 +89,35 @@ let notices = rd('notices.json', []);
 const dms = new Map(Object.entries(rd('dms.json', {})).filter(([, a]) => Array.isArray(a)).map(([k, a]) => [k, a.filter(m => m && m.enc && m.from && m.to)]));
 const persistDms = () => save('dms.json', Object.fromEntries(dms));   // ciphertext only (end-to-end encrypted)
 
+/* ---------- messaging + social state (v0.7): reactions, reads, profiles, follow/block, feed, notifications ---------- */
+const REACTS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+const posts = (rd('posts.json', []) || []).filter(p => p && typeof p.id === 'string' && typeof p.by === 'string' && typeof p.text === 'string' && Array.isArray(p.likes));
+const notifs = Object.assign(Object.create(null), rd('notifs.json', {}));
+const ukey = n => String(n).toLowerCase();
+const urec = n => (typeof n === 'string' && n) ? users[ukey(n)] : undefined;
+const line = (t, n) => clean(t).replace(/\s+/g, ' ').slice(0, n);
+const snippet = t => line(t, 80);
+const encValid = e => !!e && typeof e.iv === 'string' && typeof e.ct === 'string' && e.iv.length <= 32 && e.ct.length <= 6000 && e.ct.length > 0;
+const blocksEither = (a, b) => { const x = urec(a), y = urec(b); return !!((x && (x.blocked || []).includes(ukey(b))) || (y && (y.blocked || []).includes(ukey(a)))); };
+function toggle(arr, v) { const i = arr.indexOf(v); if (i < 0) { arr.push(v); return true; } arr.splice(i, 1); return false; }
+const msgOf = (room, id) => (typeof room === 'string' && ROOMS.includes(room) && typeof id === 'string') ? hist[room].find(x => x.id === id && x.kind !== 'sys') : undefined;
+const dmOf = (a, b, id) => (typeof a === 'string' && typeof b === 'string' && typeof id === 'string') ? (dms.get(dmKey(a, b)) || []).find(x => x.id === id) : undefined;
+const convKey = k => { k = typeof k === 'string' ? k.toLowerCase() : ''; return (k.startsWith('r:') ? ROOMS.includes(k.slice(2)) : k.startsWith('d:') && !!users[k.slice(2)]) ? k : ''; };
+function notify(to, o) {
+  const u = urec(to); if (!u || ukey(to) === ukey(o.from) || blocksEither(to, o.from)) return;
+  const arr = notifs[ukey(to)] = notifs[ukey(to)] || [], n = { id: uid(), ts: Date.now(), read: false, ...o };
+  arr.unshift(n); if (arr.length > 100) arr.length = 100; save('notifs.json', notifs);
+  const t = findByName(u.name); if (t) send(t.ws, { t: 'notif', n });
+}
+const pubProfile = u => { const p = u.profile || {}; return { d: p.display || '', b: p.bio || '', a: p.avatar || '' }; };
+const profilesMap = () => { const o = {}; Object.values(users).forEach(u => { if (u.profile && (u.profile.display || u.profile.bio || u.profile.avatar)) o[u.name] = pubProfile(u); }); return o; };
+const prefsOf = u => ({ following: u.following || [], blocked: u.blocked || [], muted: u.muted || [], reads: u.reads || {}, receipts: !(u.profile && u.profile.receipts === false) });
+function peerReadsFor(name) {
+  const o = {}, me = ukey(name); for (const other of Object.keys(dmsFor(name))) { const r = urec(other); if (r && !(r.profile && r.profile.receipts === false) && r.reads && r.reads['d:' + me]) o[r.name] = r.reads['d:' + me]; } return o;
+}
+const toUser = (name, o) => { const t = findByName(name); if (t) send(t.ws, o); };
+const toBoth = (msg, o) => { [msg.from, msg.to].forEach(n => { const t = findByName(n); if (t) send(t.ws, o); }); };
+
 /* orphan cleanup: upload files that no record points to (crashed uploads) */
 try { const known = new Set(files.map(f => f.id)); for (const n of fs.readdirSync(UP)) { const p = path.join(UP, n); if (!known.has(n) && Date.now() - fs.statSync(p).mtimeMs > 3600e3) { fs.unlinkSync(p); log('INFO', 'removed orphan upload ' + n); } } } catch { /* ignore */ }
 
@@ -118,11 +147,11 @@ const allNames = () => Object.values(users).map(u => u.name).sort((a, b) => a.lo
 const publicKeys = () => { const o = {}; Object.values(users).forEach(u => { if (u.pub) o[u.name] = u.pub; }); return o; };
 const pushUsers = () => bcast({ t: 'users', users: userList(), all: allNames() });
 const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts, img: IMG.test(name) }));
-function addRoomMsg(room, from, text, kind) {
+function addRoomMsg(room, from, text, kind, extra) {
   if (!ROOMS.includes(room)) return;
-  const m = { id: uid(), room, from, text, ts: Date.now(), kind };
+  const m = { id: uid(), room, from, text, ts: Date.now(), kind, ...extra };
   hist[room].push(m); if (hist[room].length > 300) hist[room].shift();
-  save('messages.json', hist); bcast({ t: 'msg', m });
+  save('messages.json', hist); bcast({ t: 'msg', m }); return m;
 }
 function dropSession(s, why) {
   sessions.delete(s.token); const w = s.ws;
@@ -284,7 +313,7 @@ async function doJoin(ws, m) {
   if (ws.readyState !== 1) { return; }
   clearTimeout(ws.joinTimer); s.ws = ws; ws.s = s;
   const rec = users[s.name.toLowerCase()] || {};
-  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576) });
+  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name) });
   pushUsers();
   addRoomMsg('general', 'system', `${s.name} connected`, 'sys');
 }
@@ -302,10 +331,17 @@ function onMessage(ws, m) {
 
   if (m.t === 'msg') {
     const text = clean(m.text); if (!text || !str(m.room) || !ROOMS.includes(m.room)) return;
-    addRoomMsg(m.room, s.name, text, m.kind === 'me' ? 'me' : 'chat');
+    let reply; if (m.reply) { const r = msgOf(m.room, m.reply); if (r) reply = { id: r.id, from: r.from, text: snippet(r.text) }; }
+    const sent = addRoomMsg(m.room, s.name, text, m.kind === 'me' ? 'me' : 'chat', reply ? { reply } : undefined);
+    if (sent) {
+      const told = new Set([ukey(s.name)]);
+      if (reply) { told.add(ukey(reply.from)); if (reply.from !== 'system') notify(reply.from, { type: 'reply', from: s.name, text: snippet(text), conv: 'r:' + m.room }); }
+      for (const mm of text.matchAll(/@([\p{L}\p{N}_.-]{1,30})/gu)) { const u = urec(mm[1]); if (u && !told.has(ukey(u.name))) { told.add(ukey(u.name)); notify(u.name, { type: 'mention', from: s.name, text: snippet(text), conv: 'r:' + m.room }); } }
+    }
   } else if (m.t === 'dm') {
     const rec = str(m.to) ? users[m.to.toLowerCase()] : null, e = m.enc;
     if (!rec) return send(ws, { t: 'err', text: `No user named "${String(m.to).slice(0, 20)}".` });
+    if (blocksEither(s.name, rec.name)) return send(ws, { t: 'err', text: 'This message could not be delivered.' });
     if (!e || !str(e.iv) || !str(e.ct) || e.iv.length > 32 || e.ct.length > 6000 || !e.ct.length) return send(ws, { t: 'err', text: 'Direct messages must be end-to-end encrypted.' });
     const to = findByName(rec.name);
     const msg = { id: uid(), from: s.name, to: rec.name, enc: { iv: e.iv, ct: e.ct }, ts: Date.now() };
@@ -337,6 +373,69 @@ function onMessage(ws, m) {
     if (!s.admin) return send(ws, { t: 'err', text: 'Only admins can post notices.' });
     const text = clean(m.text); if (!text) return;
     notices = [{ id: uid(), text, by: s.name, ts: Date.now() }, ...notices].slice(0, 50); save('notices.json', notices); bcast({ t: 'notices', notices });
+  } else if (m.t === 'edit') {
+    if (m.room) { const x = msgOf(m.room, m.id), text = clean(m.text); if (!x || x.from !== s.name || !text) return; x.text = text; x.edited = Date.now(); save('messages.json', hist); bcast({ t: 'upd', room: m.room, m: x }); }
+    else { const x = dmOf(s.name, m.to, m.id); if (!x || x.from !== s.name || !encValid(m.enc)) return; x.enc = { iv: m.enc.iv, ct: m.enc.ct }; x.edited = Date.now(); persistDms(); toBoth(x, { t: 'dmupd', m: x }); }
+  } else if (m.t === 'deldm') {
+    const x = dmOf(s.name, m.to, m.id); if (!x || x.from !== s.name) return;
+    const k = dmKey(s.name, m.to); dms.set(k, dms.get(k).filter(y => y !== x)); persistDms(); toBoth(x, { t: 'dmdel', a: x.from, b: x.to, id: x.id });
+  } else if (m.t === 'react') {
+    if (!REACTS.includes(m.emoji)) return;
+    const x = m.room ? msgOf(m.room, m.id) : dmOf(s.name, m.to, m.id); if (!x) return;
+    if (x.reactions && !Object.prototype.hasOwnProperty.call(x.reactions, m.emoji) && Object.keys(x.reactions).length >= 12) return;
+    x.reactions = x.reactions || {}; const arr = x.reactions[m.emoji] = x.reactions[m.emoji] || [], on = toggle(arr, s.name);
+    if (!arr.length) delete x.reactions[m.emoji]; if (!Object.keys(x.reactions).length) delete x.reactions;
+    if (m.room) { save('messages.json', hist); bcast({ t: 'upd', room: m.room, m: x }); } else { persistDms(); toBoth(x, { t: 'dmupd', m: x }); }
+    if (on && x.from !== s.name && x.from !== 'system') notify(x.from, { type: 'react', from: s.name, text: m.emoji + ' ' + (m.room ? snippet(x.text) : 'your private message'), conv: m.room ? 'r:' + m.room : 'd:' + ukey(s.name) });
+  } else if (m.t === 'pin') {
+    if (!s.admin) return send(ws, { t: 'err', text: 'Only admins can pin messages.' });
+    const x = msgOf(m.room, m.id); if (!x) return;
+    if (m.on && hist[m.room].filter(y => y.pinned).length >= 5 && !x.pinned) return send(ws, { t: 'err', text: 'At most 5 pinned messages per channel.' });
+    if (m.on) x.pinned = true; else delete x.pinned; save('messages.json', hist); bcast({ t: 'upd', room: m.room, m: x });
+  } else if (m.t === 'read') {
+    const k = convKey(m.k), u = urec(s.name), ts = Number(m.ts); if (!k || !u || !Number.isFinite(ts) || ts > Date.now() + 5000) return;
+    u.reads = u.reads || {}; if ((u.reads[k] || 0) >= ts || (!u.reads[k] && Object.keys(u.reads).length >= 500)) return;
+    u.reads[k] = ts; save('users.json', users);
+    if (k.startsWith('d:') && !(u.profile && u.profile.receipts === false)) toUser(users[k.slice(2)].name, { t: 'receipt', from: s.name, ts });
+  } else if (m.t === 'mute') {
+    const k = convKey(m.k), u = urec(s.name); if (!k || !u) return;
+    u.muted = u.muted || []; const has = u.muted.includes(k); if (!!m.on !== has) { if (m.on) u.muted.push(k); else u.muted = u.muted.filter(x => x !== k); }
+    save('users.json', users); send(ws, { t: 'prefs', muted: u.muted });
+  } else if (m.t === 'profile') {
+    const u = urec(s.name); if (!u) return; const av = m.avatar === undefined ? (u.profile || {}).avatar || '' : m.avatar;
+    if (typeof av !== 'string' || (av && (av.length > 8000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(av)))) return send(ws, { t: 'err', text: 'Avatar must be a small png/jpeg/webp image.' });
+    u.profile = { display: line(m.display, 30), bio: line(m.bio, 200), avatar: av, receipts: m.receipts !== false };
+    save('users.json', users); bcast({ t: 'profile', name: u.name, p: pubProfile(u) }); send(ws, { t: 'prefs', receipts: u.profile.receipts });
+  } else if (m.t === 'search') {
+    const q = line(m.q, 30).toLowerCase(), me = urec(s.name); if (!q) return send(ws, { t: 'results', q: '', users: [] });
+    const out = Object.values(users).filter(u => !blocksEither(u.name, s.name) || u.name === s.name).filter(u => u.name.toLowerCase().includes(q) || ((u.profile || {}).display || '').toLowerCase().includes(q))
+      .sort((a, b) => (b.name.toLowerCase().startsWith(q) - a.name.toLowerCase().startsWith(q)) || a.name.localeCompare(b.name)).slice(0, 20)
+      .map(u => ({ n: u.name, ...pubProfile(u), fo: Object.values(users).filter(x => (x.following || []).includes(ukey(u.name))).length, f: (me.following || []).includes(ukey(u.name)), bl: (me.blocked || []).includes(ukey(u.name)) }));
+    send(ws, { t: 'results', q, users: out });
+  } else if (m.t === 'follow' || m.t === 'block') {
+    const me = urec(s.name), tg = urec(m.name); if (!me || !tg || tg === me) return;
+    const f = m.t === 'follow' ? 'following' : 'blocked', k = ukey(tg.name); me[f] = me[f] || [];
+    if (f === 'following' && m.on && blocksEither(me.name, tg.name)) return send(ws, { t: 'err', text: 'You cannot follow this user.' });
+    const has = me[f].includes(k); if (!!m.on !== has) { if (m.on) me[f].push(k); else me[f] = me[f].filter(x => x !== k); if (m.on && f === 'following') notify(tg.name, { type: 'follow', from: s.name, text: 'started following you' }); }
+    if (f === 'blocked' && m.on) { me.following = (me.following || []).filter(x => x !== k); tg.following = (tg.following || []).filter(x => x !== ukey(me.name)); }
+    save('users.json', users); send(ws, { t: 'prefs', following: me.following || [], blocked: me.blocked || [] });
+  } else if (m.t === 'post') {
+    const text = clean(m.text).slice(0, 500); if (!text) return;
+    const p = { id: uid(), by: s.name, text, ts: Math.max(Date.now(), ((posts[0] || {}).ts || 0) + 1), likes: [] }; posts.unshift(p); if (posts.length > 2000) posts.pop(); save('posts.json', posts);
+    online().forEach(o => { if (!blocksEither(o.name, s.name)) send(o.ws, { t: 'post', p, f: o.name === s.name || ((urec(o.name) || {}).following || []).includes(ukey(s.name)) }); });
+  } else if (m.t === 'feed') {
+    const scope = m.scope === 'following' ? 'following' : 'all', me = urec(s.name), fol = new Set(me.following || []), before = Number.isFinite(m.before) ? m.before : Infinity;
+    const list = posts.filter(p => p.ts < before && !blocksEither(s.name, p.by) && (scope === 'all' || p.by === s.name || fol.has(ukey(p.by))));
+    send(ws, { t: 'feed', scope, before: Number.isFinite(m.before) ? m.before : null, posts: list.slice(0, 20), more: list.length > 20 });
+  } else if (m.t === 'like') {
+    const p = posts.find(x => x.id === m.id); if (!p || blocksEither(s.name, p.by)) return;
+    const on = toggle(p.likes, s.name); save('posts.json', posts); bcast({ t: 'plike', id: p.id, likes: p.likes });
+    if (on && p.by !== s.name) notify(p.by, { type: 'like', from: s.name, text: snippet(p.text) });
+  } else if (m.t === 'delpost') {
+    const p = posts.find(x => x.id === m.id); if (!p || (p.by !== s.name && !s.admin)) return;
+    posts.splice(posts.indexOf(p), 1); save('posts.json', posts); bcast({ t: 'pdel', id: p.id });
+  } else if (m.t === 'notifread') {
+    (notifs[ukey(s.name)] || []).forEach(n => { n.read = true; }); save('notifs.json', notifs);
   } else if (m.t === 'delnotice') {
     if (!s.admin || !str(m.id)) return;
     notices = notices.filter(n => n.id !== m.id); save('notices.json', notices); bcast({ t: 'notices', notices });
