@@ -35,6 +35,9 @@ On phones and tablets the tabbed layout is used and the apps open full screen fr
 - **Alerts:** follows, likes, reactions, replies and @mentions, stored on the server until you read them.
 - Channels, the feed, profiles and reactions are **not** end-to-end encrypted. Reactions on direct messages are visible to the server (which emoji, by whom), the message text is not.
 
+## Groups and communities (v0.8)
+Open the Groups window to create a group (public: anyone can find and join; or invite-only), discover public groups, and manage members. Roles are enforced by the server: **owner** (everything, including roles, rename, delete), **moderator** (invite, remove members, delete messages, pin) and **member** (post, react, reply, edit own). Group messages go only to members and have the same features as channels (reply, edit, reactions, pins, mute, unread). Groups are **not end-to-end encrypted**: the server stores their messages in `groups.json`. An owner cannot leave (delete the group instead), a group has at most 200 members and a user can own at most 10 groups.
+
 ## Encrypted direct messages
 Direct messages are encrypted in your browser with ECDH (P-256) + AES-256-GCM (Web Crypto, no dependencies). Each account has a key pair created on first sign-in; the private key is wrapped with a key derived from your password (PBKDF2) and stored on the server only as an opaque blob, so you can sign in from any device. The server relays ciphertext and rejects plaintext DMs.
 
@@ -93,19 +96,22 @@ What is in place:
 - **Downloads:** served with an HttpOnly, SameSite=Strict cookie, so the token is never in a URL. Files are sent as downloads; only png/jpg/gif/webp preview inline (SVG is never rendered).
 - **Uploads:** size and per-user and total quotas are enforced while streaming (also for concurrent uploads), stalled uploads are cut, partial files are removed.
 - **Server robustness:** WebSocket origin check, per-IP connection limit, sign-in timeout, message rate limit, handler errors contained, `/healthz`, graceful shutdown (data flushed on SIGTERM).
-- **Direct messages:** end-to-end encrypted in the browser (ECDH P-256 + AES-GCM). The private key is stored locked with your password. The server stores and forwards ciphertext only. Keys are trusted on first use (TOFU); compare the safety number in Security to verify a contact. Public rooms, the board and files are **not** end-to-end encrypted.
+- **Direct messages:** end-to-end encrypted in the browser (ECDH P-256 + AES-GCM). The private key is stored locked with your password. The server stores and forwards ciphertext only. Keys are trusted on first use (TOFU); in Security, paste your contact's safety number into the compare box to verify them. Public rooms, the board and files are **not** end-to-end encrypted.
 - **Social data:** profiles, posts, follows, blocks, read positions and notifications are stored in plain JSON on the server and visible to the operator. Avatars are accepted only as small png/jpeg/webp data URLs (never SVG). All user text is inserted as plain text, never as HTML. Blocks are enforced on the server for direct messages and feed; hiding blocked people's channel messages is done in your browser.
 - Anyone signed in can download any shared file. Set `ACCESS_CODE` when the server is public and do not share secrets in files.
 - Use HTTPS when online, otherwise passwords travel unencrypted.
 
 ## Backup and restore
-All state is in `DATA_DIR` (default `./data`): `users.json` (accounts, profiles, follows, blocks, read positions, mutes), `messages.json`, `dms.json` (ciphertext), `notices.json`, `posts.json`, `notifs.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
+All state is in `DATA_DIR` (default `./data`): `users.json` (accounts, profiles, follows, blocks, read positions, mutes), `messages.json`, `dms.json` (ciphertext), `notices.json`, `posts.json`, `notifs.json`, `groups.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
 - **Backup:** stop the server (or use a filesystem snapshot), then copy the whole `DATA_DIR`. Copying while it runs can capture `files.json` and `uploads/` at slightly different moments.
 - **Restore:** stop the server, replace `DATA_DIR` with the backup, start it again. If a JSON file is corrupt the server falls back to its `.bak` and keeps the corrupt file for inspection.
 - Back up `users.json` together with `dms.json`: DMs can only be read with the users' passwords, which unlock their keys.
 
+## Terminal and monitor
+Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (server uptime and connections from `/healthz`, HTTP and WebSocket latency, clock difference to the server, secure-context and encryption state), `scan`, `files`, `whoami`, `uptime`, `status`, `w`, `open`. The Monitor shows only live values from your session. In `?demo` mode nodes, replies and latency are simulated in the browser and both windows say so.
+
 ## Tests
-`npm test` runs the server integration tests (39, no browser). `npm run test:e2e` (13 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (44, no browser). `npm run test:e2e` (16 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

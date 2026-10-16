@@ -100,9 +100,21 @@ const snippet = t => line(t, 80);
 const encValid = e => !!e && typeof e.iv === 'string' && typeof e.ct === 'string' && e.iv.length <= 32 && e.ct.length <= 6000 && e.ct.length > 0;
 const blocksEither = (a, b) => { const x = urec(a), y = urec(b); return !!((x && (x.blocked || []).includes(ukey(b))) || (y && (y.blocked || []).includes(ukey(a)))); };
 function toggle(arr, v) { const i = arr.indexOf(v); if (i < 0) { arr.push(v); return true; } arr.splice(i, 1); return false; }
-const msgOf = (room, id) => (typeof room === 'string' && ROOMS.includes(room) && typeof id === 'string') ? hist[room].find(x => x.id === id && x.kind !== 'sys') : undefined;
+/* groups / communities (v0.8): server-side membership and roles; room id is 'g:<id>'. Not end-to-end encrypted. */
+const groups = Object.assign(Object.create(null), rd('groups.json', {}));
+const groupOf = room => (typeof room === 'string' && room.startsWith('g:')) ? groups[room.slice(2)] : undefined;
+const roleOf = (g, name) => (g && typeof name === 'string') ? g.members[ukey(name)] : undefined;
+const roomOk = (room, who) => (typeof room === 'string' && ROOMS.includes(room)) || !!(who && roleOf(groupOf(room), who));
+const histOf = room => groupOf(room) ? groupOf(room).hist : hist[room];
+const saveRoom = room => groupOf(room) ? save('groups.json', groups) : save('messages.json', hist);
+const toRoom = (room, o) => { const g = groupOf(room); if (!g) return bcast(o); Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, o); }); };
+const canMod = (room, s) => { const g = groupOf(room); if (!g) return !!s.admin; const r = roleOf(g, s.name); return r === 'owner' || r === 'mod'; };
+const gview = g => ({ id: g.id, name: g.name, desc: g.desc, pub: g.pub, owner: (users[g.owner] || {}).name || '', members: Object.entries(g.members).filter(([k]) => users[k]).map(([k, r]) => ({ n: users[k].name, r })), hist: g.hist });
+const pushGroup = g => Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, { t: 'group', g: gview(g) }); });
+const myGroups = name => Object.values(groups).filter(g => roleOf(g, name)).map(gview);
+const msgOf = (room, id, who) => (typeof id === 'string' && roomOk(room, who)) ? histOf(room).find(x => x.id === id && x.kind !== 'sys') : undefined;
 const dmOf = (a, b, id) => (typeof a === 'string' && typeof b === 'string' && typeof id === 'string') ? (dms.get(dmKey(a, b)) || []).find(x => x.id === id) : undefined;
-const convKey = k => { k = typeof k === 'string' ? k.toLowerCase() : ''; return (k.startsWith('r:') ? ROOMS.includes(k.slice(2)) : k.startsWith('d:') && !!users[k.slice(2)]) ? k : ''; };
+const convKey = (k, who) => { k = typeof k === 'string' ? k.toLowerCase() : ''; return (k.startsWith('r:') ? roomOk(k.slice(2), who) : k.startsWith('d:') && !!users[k.slice(2)]) ? k : ''; };
 function notify(to, o) {
   const u = urec(to); if (!u || ukey(to) === ukey(o.from) || blocksEither(to, o.from)) return;
   const arr = notifs[ukey(to)] = notifs[ukey(to)] || [], n = { id: uid(), ts: Date.now(), read: false, ...o };
@@ -148,10 +160,10 @@ const publicKeys = () => { const o = {}; Object.values(users).forEach(u => { if 
 const pushUsers = () => bcast({ t: 'users', users: userList(), all: allNames() });
 const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts, img: IMG.test(name) }));
 function addRoomMsg(room, from, text, kind, extra) {
-  if (!ROOMS.includes(room)) return;
-  const m = { id: uid(), room, from, text, ts: Date.now(), kind, ...extra };
-  hist[room].push(m); if (hist[room].length > 300) hist[room].shift();
-  save('messages.json', hist); bcast({ t: 'msg', m }); return m;
+  const g = groupOf(room); if (!g && !ROOMS.includes(room)) return;
+  const m = { id: uid(), room, from, text, ts: Date.now(), kind, ...extra }, arr = histOf(room);
+  arr.push(m); if (arr.length > 300) arr.shift();
+  saveRoom(room); toRoom(room, { t: 'msg', m }); return m;
 }
 function dropSession(s, why) {
   sessions.delete(s.token); const w = s.ws;
@@ -270,7 +282,7 @@ function dmsFor(name) {
 }
 function relayTyping(s, m) {
   const o = { t: 'typing', from: s.name };
-  if (typeof m.room === 'string' && ROOMS.includes(m.room)) { o.room = m.room; online().forEach(x => { if (x !== s) send(x.ws, o); }); }
+  if (typeof m.room === 'string' && roomOk(m.room, s.name)) { o.room = m.room; const g = groupOf(m.room); online().forEach(x => { if (x !== s && (!g || roleOf(g, x.name))) send(x.ws, o); }); }
   else if (typeof m.to === 'string') { const to = findByName(m.to); if (to && to.ws) send(to.ws, o); }
 }
 async function join(ws, m) {
@@ -313,7 +325,7 @@ async function doJoin(ws, m) {
   if (ws.readyState !== 1) { return; }
   clearTimeout(ws.joinTimer); s.ws = ws; ws.s = s;
   const rec = users[s.name.toLowerCase()] || {};
-  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name) });
+  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, groups: myGroups(s.name), profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name) });
   pushUsers();
   addRoomMsg('general', 'system', `${s.name} connected`, 'sys');
 }
@@ -330,13 +342,13 @@ function onMessage(ws, m) {
   const str = v => typeof v === 'string';
 
   if (m.t === 'msg') {
-    const text = clean(m.text); if (!text || !str(m.room) || !ROOMS.includes(m.room)) return;
-    let reply; if (m.reply) { const r = msgOf(m.room, m.reply); if (r) reply = { id: r.id, from: r.from, text: snippet(r.text) }; }
+    const text = clean(m.text); if (!text || !str(m.room) || !roomOk(m.room, s.name)) return;
+    let reply; if (m.reply) { const r = msgOf(m.room, m.reply, s.name); if (r) reply = { id: r.id, from: r.from, text: snippet(r.text) }; }
     const sent = addRoomMsg(m.room, s.name, text, m.kind === 'me' ? 'me' : 'chat', reply ? { reply } : undefined);
     if (sent) {
       const told = new Set([ukey(s.name)]);
       if (reply) { told.add(ukey(reply.from)); if (reply.from !== 'system') notify(reply.from, { type: 'reply', from: s.name, text: snippet(text), conv: 'r:' + m.room }); }
-      for (const mm of text.matchAll(/@([\p{L}\p{N}_.-]{1,30})/gu)) { const u = urec(mm[1]); if (u && !told.has(ukey(u.name))) { told.add(ukey(u.name)); notify(u.name, { type: 'mention', from: s.name, text: snippet(text), conv: 'r:' + m.room }); } }
+      for (const mm of text.matchAll(/@([\p{L}\p{N}_.-]{1,30})/gu)) { const u = urec(mm[1]); if (u && !told.has(ukey(u.name)) && roomOk(m.room, u.name)) { told.add(ukey(u.name)); notify(u.name, { type: 'mention', from: s.name, text: snippet(text), conv: 'r:' + m.room }); } }
     }
   } else if (m.t === 'dm') {
     const rec = str(m.to) ? users[m.to.toLowerCase()] : null, e = m.enc;
@@ -365,40 +377,40 @@ function onMessage(ws, m) {
   } else if (m.t === 'status') {
     if (['online', 'away', 'busy'].includes(m.status)) { s.status = m.status; pushUsers(); }
   } else if (m.t === 'delmsg') {
-    if (!str(m.room) || !ROOMS.includes(m.room) || !str(m.id)) return;
-    const arr = hist[m.room], i = arr.findIndex(x => x.id === m.id); if (i < 0) return;
-    if (arr[i].from !== s.name && !s.admin) return;
-    arr.splice(i, 1); save('messages.json', hist); bcast({ t: 'delmsg', room: m.room, id: m.id });
+    if (!str(m.room) || !roomOk(m.room, s.name) || !str(m.id)) return;
+    const arr = histOf(m.room), i = arr.findIndex(x => x.id === m.id); if (i < 0) return;
+    if (arr[i].from !== s.name && !canMod(m.room, s)) return;
+    arr.splice(i, 1); saveRoom(m.room); toRoom(m.room, { t: 'delmsg', room: m.room, id: m.id });
   } else if (m.t === 'notice') {
     if (!s.admin) return send(ws, { t: 'err', text: 'Only admins can post notices.' });
     const text = clean(m.text); if (!text) return;
     notices = [{ id: uid(), text, by: s.name, ts: Date.now() }, ...notices].slice(0, 50); save('notices.json', notices); bcast({ t: 'notices', notices });
   } else if (m.t === 'edit') {
-    if (m.room) { const x = msgOf(m.room, m.id), text = clean(m.text); if (!x || x.from !== s.name || !text) return; x.text = text; x.edited = Date.now(); save('messages.json', hist); bcast({ t: 'upd', room: m.room, m: x }); }
+    if (m.room) { const x = msgOf(m.room, m.id, s.name), text = clean(m.text); if (!x || x.from !== s.name || !text) return; x.text = text; x.edited = Date.now(); saveRoom(m.room); toRoom(m.room, { t: 'upd', room: m.room, m: x }); }
     else { const x = dmOf(s.name, m.to, m.id); if (!x || x.from !== s.name || !encValid(m.enc)) return; x.enc = { iv: m.enc.iv, ct: m.enc.ct }; x.edited = Date.now(); persistDms(); toBoth(x, { t: 'dmupd', m: x }); }
   } else if (m.t === 'deldm') {
     const x = dmOf(s.name, m.to, m.id); if (!x || x.from !== s.name) return;
     const k = dmKey(s.name, m.to); dms.set(k, dms.get(k).filter(y => y !== x)); persistDms(); toBoth(x, { t: 'dmdel', a: x.from, b: x.to, id: x.id });
   } else if (m.t === 'react') {
     if (!REACTS.includes(m.emoji)) return;
-    const x = m.room ? msgOf(m.room, m.id) : dmOf(s.name, m.to, m.id); if (!x) return;
+    const x = m.room ? msgOf(m.room, m.id, s.name) : dmOf(s.name, m.to, m.id); if (!x) return;
     if (x.reactions && !Object.prototype.hasOwnProperty.call(x.reactions, m.emoji) && Object.keys(x.reactions).length >= 12) return;
     x.reactions = x.reactions || {}; const arr = x.reactions[m.emoji] = x.reactions[m.emoji] || [], on = toggle(arr, s.name);
     if (!arr.length) delete x.reactions[m.emoji]; if (!Object.keys(x.reactions).length) delete x.reactions;
-    if (m.room) { save('messages.json', hist); bcast({ t: 'upd', room: m.room, m: x }); } else { persistDms(); toBoth(x, { t: 'dmupd', m: x }); }
+    if (m.room) { saveRoom(m.room); toRoom(m.room, { t: 'upd', room: m.room, m: x }); } else { persistDms(); toBoth(x, { t: 'dmupd', m: x }); }
     if (on && x.from !== s.name && x.from !== 'system') notify(x.from, { type: 'react', from: s.name, text: m.emoji + ' ' + (m.room ? snippet(x.text) : 'your private message'), conv: m.room ? 'r:' + m.room : 'd:' + ukey(s.name) });
   } else if (m.t === 'pin') {
-    if (!s.admin) return send(ws, { t: 'err', text: 'Only admins can pin messages.' });
-    const x = msgOf(m.room, m.id); if (!x) return;
-    if (m.on && hist[m.room].filter(y => y.pinned).length >= 5 && !x.pinned) return send(ws, { t: 'err', text: 'At most 5 pinned messages per channel.' });
-    if (m.on) x.pinned = true; else delete x.pinned; save('messages.json', hist); bcast({ t: 'upd', room: m.room, m: x });
+    if (!canMod(m.room, s)) return send(ws, { t: 'err', text: 'Only admins and moderators can pin messages.' });
+    const x = msgOf(m.room, m.id, s.name); if (!x) return;
+    if (m.on && (histOf(m.room) || []).filter(y => y.pinned).length >= 5 && !x.pinned) return send(ws, { t: 'err', text: 'At most 5 pinned messages per channel.' });
+    if (m.on) x.pinned = true; else delete x.pinned; saveRoom(m.room); toRoom(m.room, { t: 'upd', room: m.room, m: x });
   } else if (m.t === 'read') {
-    const k = convKey(m.k), u = urec(s.name), ts = Number(m.ts); if (!k || !u || !Number.isFinite(ts) || ts > Date.now() + 5000) return;
+    const k = convKey(m.k, s.name), u = urec(s.name), ts = Number(m.ts); if (!k || !u || !Number.isFinite(ts) || ts > Date.now() + 5000) return;
     u.reads = u.reads || {}; if ((u.reads[k] || 0) >= ts || (!u.reads[k] && Object.keys(u.reads).length >= 500)) return;
     u.reads[k] = ts; save('users.json', users);
     if (k.startsWith('d:') && !(u.profile && u.profile.receipts === false)) toUser(users[k.slice(2)].name, { t: 'receipt', from: s.name, ts });
   } else if (m.t === 'mute') {
-    const k = convKey(m.k), u = urec(s.name); if (!k || !u) return;
+    const k = convKey(m.k, s.name), u = urec(s.name); if (!k || !u) return;
     u.muted = u.muted || []; const has = u.muted.includes(k); if (!!m.on !== has) { if (m.on) u.muted.push(k); else u.muted = u.muted.filter(x => x !== k); }
     save('users.json', users); send(ws, { t: 'prefs', muted: u.muted });
   } else if (m.t === 'profile') {
@@ -434,6 +446,36 @@ function onMessage(ws, m) {
   } else if (m.t === 'delpost') {
     const p = posts.find(x => x.id === m.id); if (!p || (p.by !== s.name && !s.admin)) return;
     posts.splice(posts.indexOf(p), 1); save('posts.json', posts); bcast({ t: 'pdel', id: p.id });
+  } else if (m.t === 'ping') {
+    send(ws, { t: 'pong', id: String(m.id || '').slice(0, 32) });
+  } else if (m.t === 'gcreate') {
+    const name = line(m.name, 40); if (!name) return;
+    if (Object.values(groups).filter(g => g.owner === ukey(s.name)).length >= 10) return send(ws, { t: 'err', text: 'You can own at most 10 groups.' });
+    let id; do { id = Math.random().toString(36).slice(2, 10); } while (!id || groups[id]);
+    const g = groups[id] = { id, name, desc: line(m.desc, 200), pub: !!m.pub, owner: ukey(s.name), members: { [ukey(s.name)]: 'owner' }, created: Date.now(), hist: [] };
+    save('groups.json', groups); pushGroup(g);
+  } else if (m.t === 'gjoin' || m.t === 'ginvite') {
+    const g = groups[String(m.id)]; if (!g) return;
+    const who = m.t === 'gjoin' ? urec(s.name) : urec(m.name);
+    if (!who || roleOf(g, who.name) || Object.keys(g.members).length >= 200) return;
+    if (m.t === 'gjoin' ? !g.pub : (!['owner', 'mod'].includes(roleOf(g, s.name)) || blocksEither(s.name, who.name))) return send(ws, { t: 'err', text: m.t === 'gjoin' ? 'This group is invite-only.' : 'You cannot invite this user.' });
+    g.members[ukey(who.name)] = 'member'; save('groups.json', groups); pushGroup(g);
+    addRoomMsg('g:' + g.id, 'system', who.name + (m.t === 'gjoin' ? ' joined' : ' was invited by ' + s.name), 'sys');
+    if (m.t === 'ginvite') notify(who.name, { type: 'invite', from: s.name, text: 'added you to ' + g.name, conv: 'r:g:' + g.id });
+  } else if (m.t === 'gkick' || m.t === 'grole' || m.t === 'gleave') {
+    const g = groups[String(m.id)], me = roleOf(g, s.name); if (!g || !me) return;
+    const tg = m.t === 'gleave' ? urec(s.name) : urec(m.name), tr = tg && roleOf(g, tg.name); if (!tg || !tr || tr === 'owner') return;
+    if (m.t === 'grole') { if (me !== 'owner' || !['mod', 'member'].includes(m.role)) return; g.members[ukey(tg.name)] = m.role; save('groups.json', groups); return pushGroup(g); }
+    if (m.t === 'gkick' && !(me === 'owner' || (me === 'mod' && tr === 'member'))) return send(ws, { t: 'err', text: 'You do not have permission to remove this member.' });
+    delete g.members[ukey(tg.name)]; save('groups.json', groups); toUser(tg.name, { t: 'gleave', id: g.id });
+    addRoomMsg('g:' + g.id, 'system', tg.name + (m.t === 'gleave' ? ' left' : ' was removed by ' + s.name), 'sys'); pushGroup(g);
+  } else if (m.t === 'gedit' || m.t === 'gdelete') {
+    const g = groups[String(m.id)]; if (!g || g.owner !== ukey(s.name)) return;
+    if (m.t === 'gedit') { g.name = line(m.name, 40) || g.name; g.desc = line(m.desc, 200); g.pub = !!m.pub; save('groups.json', groups); pushGroup(g); }
+    else { Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, { t: 'gleave', id: g.id }); }); delete groups[g.id]; save('groups.json', groups); }
+  } else if (m.t === 'gsearch') {
+    const q = line(m.q, 40).toLowerCase(), list = Object.values(groups).filter(g => g.pub && (!q || g.name.toLowerCase().includes(q))).sort((a, b) => b.created - a.created).slice(0, 20);
+    send(ws, { t: 'gresults', q, groups: list.map(g => ({ id: g.id, name: g.name, desc: g.desc, n: Object.keys(g.members).length, member: !!roleOf(g, s.name) })) });
   } else if (m.t === 'notifread') {
     (notifs[ukey(s.name)] || []).forEach(n => { n.read = true; }); save('notifs.json', notifs);
   } else if (m.t === 'delnotice') {

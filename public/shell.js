@@ -12,6 +12,7 @@
     terminal: { title: 'Terminal', ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
     nodes: { title: 'Network', ic: 'nodes', cat: 'Network', sel: '#pNodes', tab: 'rooms' },
     files: { title: 'Files', ic: 'files', cat: 'Network', sel: '#right', tab: 'files' },
+    groups: { title: 'Groups', ic: 'chat', cat: 'Network', w: 480, h: 540, build: b => Social.groups(b) },
     people: { title: 'People', ic: 'nodes', cat: 'Network', w: 460, h: 520, build: b => Social.people(b) },
     feed: { title: 'Feed', ic: 'board', cat: 'Network', w: 460, h: 520, build: b => Social.feed(b) },
     alerts: { title: 'Alerts', ic: 'radar', cat: 'Network', w: 420, h: 420, build: b => Social.alerts(b) },
@@ -173,11 +174,26 @@
     const L = (t, g) => line(out, t, g), hist = []; let hi = 0;
     const sz = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
     const CMDS = {
-      help() { ['help                 this list', 'whoami               who you are and your link state', 'scan                 list nodes with status and key fingerprints', 'files                list shared files', 'ping                 measure round-trip latency', 'uptime               time since you signed in', 'status <online|away|busy>', 'w <user> <message>   encrypted private message', 'open <#room|user|board>  switch the chat window', 'clear'].forEach(x => L(x)); },
+      help() { ['help                 this list', 'whoami               who you are and your link state', 'scan                 list nodes with status and key fingerprints', 'files                list shared files', 'ping                 HTTP and WebSocket round trip to the server', 'diag                 connection diagnostics: server, HTTP, WebSocket, clock, encryption', 'uptime               time since you signed in', 'status <online|away|busy>', 'w <user> <message>   encrypted private message', 'open <#room|user|board>  switch the chat window', 'clear'].forEach(x => L(x)); },
       whoami() { L(`${st.me}${st.admin ? ' (admin)' : ''} | status ${$('#statusSel').value} | link ${$('#stat').textContent} | e2e ${E2E.priv ? 'active' : 'unavailable'}`, '[+]'); },
       async scan() { const names = [...new Set([...st.users, ...st.all])]; L(names.length + ' node(s):'); for (const n of names) { const s = st.users.includes(n) ? (st.status[n] || 'online') : 'offline', k = E2E.keys[n]; L(`${n.padEnd(14)} ${s.padEnd(8)} ${k ? (await CN.fingerprint(k)).slice(0, 14) : 'no key'}`, st.users.includes(n) ? '[+]' : '[-]'); } },
       files() { if (!st.files.length) return L('library is empty'); st.files.forEach(f => L(`${f.name}  ${sz(f.size)}  by ${f.owner}`)); },
-      async ping() { const t = []; for (let i = 0; i < 4; i++) { const t0 = performance.now(); try { await fetch('/api/info', { cache: 'no-store' }); t.push(performance.now() - t0); } catch { L('request failed', '[-]'); return; } } L(`4 probes: min ${Math.min(...t).toFixed(0)} ms, avg ${(t.reduce((a, b) => a + b) / t.length).toFixed(0)} ms, max ${Math.max(...t).toFixed(0)} ms`, '[+]'); },
+      async pingHttp() { const t = []; for (let i = 0; i < 4; i++) { const t0 = performance.now(); try { await fetch('/api/info', { cache: 'no-store' }); t.push(performance.now() - t0); } catch { L('request failed', '[-]'); return; } } L(`HTTP       4 probes: min ${Math.min(...t).toFixed(0)} ms, avg ${(t.reduce((a, b) => a + b) / t.length).toFixed(0)} ms, max ${Math.max(...t).toFixed(0)} ms`, '[+]'); },
+      async ping() {
+        await CMDS.pingHttp(); const w = []; for (let i = 0; i < 4; i++) { const v = await wsPing(); if (v == null) { L('WebSocket  no reply within 3 s', '[-]'); return; } w.push(v); }
+        L(`WebSocket  4 probes: min ${Math.min(...w)} ms, avg ${(w.reduce((a, b) => a + b) / w.length).toFixed(0)} ms, max ${Math.max(...w)} ms`, '[+]');
+      },
+      async diag() {
+        const rs = ['connecting', 'open', 'closing', 'closed'][st.ws ? st.ws.readyState : 3]; L('link        WebSocket ' + rs + (IS_DEMO ? ' (simulated in demo mode)' : ''), rs === 'open' ? '[+]' : '[-]');
+        const t = []; let info = null, skew = null;
+        for (let i = 0; i < 3; i++) { const t0 = performance.now(); try { const r = await fetch('/healthz', { cache: 'no-store' }); t.push(performance.now() - t0); if (r.ok) { info = await r.json().catch(() => null); const d = r.headers.get('date'); if (d) skew = Date.now() - new Date(d).getTime(); } } catch { L('server      /healthz request failed', '[-]'); break; } }
+        if (t.length) L(`server      HTTP /healthz min ${Math.min(...t).toFixed(0)} ms, avg ${(t.reduce((a, b) => a + b) / t.length).toFixed(0)} ms` + (info && info.uptime != null ? `, up ${Math.floor(info.uptime / 3600)}h ${Math.floor(info.uptime % 3600 / 60)}m, ${info.online} connection(s)` : ''), '[+]');
+        const w = []; for (let i = 0; i < 3; i++) { const v = await wsPing(); if (v != null) w.push(v); }
+        L(w.length ? `websocket   round trip min ${Math.min(...w)} ms, avg ${(w.reduce((a, b) => a + b) / w.length).toFixed(0)} ms (${w.length}/3 replies)` : 'websocket   no reply', w.length ? '[+]' : '[-]');
+        if (skew != null) L(`clock       differs from the server by about ${(skew / 1000).toFixed(1)} s (resolution 1 s)`, Math.abs(skew) > 30000 ? '[!]' : '[+]');
+        L(`security    secure context ${isSecureContext ? 'yes' : 'NO (end-to-end DMs need HTTPS or localhost)'}, e2e key ${E2E.priv ? 'active' : 'unavailable'}`, isSecureContext && E2E.priv ? '[+]' : '[!]');
+        L(`session     ${Math.floor((Date.now() - st.t0) / 60000)} min, ${st.users.length} node(s) online, ${st.files.length} file(s)`);
+      },
       uptime() { const s = Math.floor((Date.now() - st.t0) / 1000); L(`${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m ${s % 60}s`); },
       status(a) { if (!['online', 'away', 'busy'].includes(a)) return L('usage: status <online|away|busy>', '[!]'); setStatus(a); L('status set to ' + a, '[+]'); },
       w(a) { const [to, ...m] = a.split(' '); if (!to || !m.length) return L('usage: w <user> <message>', '[!]'); sendDM(to, m.join(' ')); L('queued (end-to-end encrypted)', '[+]'); },
@@ -192,11 +208,12 @@
     }
     form.onsubmit = e => { e.preventDefault(); const v = inp.value; inp.value = ''; if (v.trim()) { hist.push(v); hi = hist.length; } run(v); };
     inp.addEventListener('keydown', e => { if (e.key === 'ArrowUp' && hist.length) { hi = Math.max(0, hi - 1); inp.value = hist[hi]; e.preventDefault(); } if (e.key === 'ArrowDown') { hi = Math.min(hist.length, hi + 1); inp.value = hist[hi] || ''; e.preventDefault(); } });
-    term = { run, focus: () => inp.focus() }; L('CampusNet terminal. Type help for commands.');
+    term = { run, focus: () => inp.focus() }; L('CampusNet terminal. Type help for commands.'); if (IS_DEMO) L('Demo mode: nodes, replies and latency are simulated in your browser.', '[!]');
   }
   function buildMonitor(body) {
     body.classList.add('mon'); const cards = {}, mk = (k, label, wide) => { const c = el('div', 'stat' + (wide ? ' wide' : '')); c.append(el('small', null, label)); cards[k] = el('b', null, '--'); c.append(cards[k]); body.append(c); return c; };
-    ['link:Link', 'lat:Latency', 'nodes:Nodes online', 'files:Library', 'unread:Unread', 'up:Session', 'e2e:Encryption'].forEach(s => { const [k, l] = s.split(':'); mk(k, l); });
+    if (IS_DEMO) body.append(el('p', 'note wide', 'Demo mode: nodes and latency below are simulated in your browser.'));
+    ['link:Link', 'lat:HTTP latency', 'ws:WebSocket latency', 'nodes:Nodes online', 'files:Library', 'unread:Unread', 'up:Session', 'e2e:Encryption'].forEach(s => { const [k, l] = s.split(':'); mk(k, l); });
     const sc = mk('spark', 'Latency history', true), cv = el('canvas'); cv.setAttribute('aria-label', 'Latency history graph'); cv.setAttribute('role', 'img'); sc.append(cv); cards.spark.remove();
     const draw = () => {
       const w = cv.clientWidth, h = cv.clientHeight; if (!w) return; cv.width = w * 2; cv.height = h * 2; const g = cv.getContext('2d'); g.scale(2, 2); g.clearRect(0, 0, w, h);
@@ -208,7 +225,7 @@
     const sz = n => n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
     function render() {
       const v = st.lat.filter(x => x != null), un = Object.values(st.unread).reduce((a, b) => a + b, 0), s = Math.max(0, Math.floor((Date.now() - st.t0) / 1000));
-      cards.link.textContent = $('#stat').textContent.toUpperCase(); cards.lat.textContent = v.length ? v[v.length - 1] + ' ms' : '--';
+      cards.link.textContent = $('#stat').textContent.toUpperCase(); cards.lat.textContent = v.length ? v[v.length - 1] + ' ms' : '--'; cards.ws.textContent = st.wsLat != null ? st.wsLat + ' ms' : '--';
       cards.nodes.textContent = st.users.length + ' / ' + (st.all.length || st.users.length); cards.files.textContent = st.files.length + ' \u00B7 ' + sz(st.files.reduce((a, f) => a + f.size, 0));
       cards.unread.textContent = un; cards.up.textContent = st.t0 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m ${s % 60}s` : '--';
       cards.e2e.textContent = !CN.supported ? 'UNAVAILABLE' : E2E.priv ? 'ACTIVE' : 'NOT READY'; draw();
@@ -216,7 +233,7 @@
     document.addEventListener('cn:state', () => { if (!body.closest('.wclosed')) render(); }); setInterval(() => { if (!body.closest('.wclosed')) render(); }, 1000); render();
   }
   function buildSecurity(body) {
-    body.classList.add('sec'); const me = el('div', 'stat'), list = el('div'), fpc = {};
+    body.classList.add('sec'); const me = el('div', 'stat'), list = el('div'), fpc = {}, cmpVals = {};
     body.append(me, el('p', 'note', 'Direct messages are encrypted in your browser (ECDH P-256 + AES-256-GCM). The server only relays ciphertext. Channels, files and notices are not encrypted. Compare safety numbers with your contact over another channel to be sure nobody swapped a key.'), el('small', 'dim', 'CONTACTS'), list);
     let tok = 0;
     async function render() {
@@ -228,13 +245,16 @@
         const pub = E2E.keys[n]; if (!fpc[pub.x]) fpc[pub.x] = await CN.fingerprint(pub);
         const s = E2E.state[n] || (tofu[n] ? (tofu[n].fp === fpc[pub.x] ? (tofu[n].v ? 'verified' : 'ok') : 'changed') : 'new');
         const p = el('div', 'peer'); p.append(el('span', 'pn', n), el('span', 'pill ' + s, s === 'changed' ? 'key changed' : s === 'new' ? 'not used yet' : s), el('div', 'fp', fpc[pub.x]));
+        const cmp = el('input'), res = el('small', 'cmpres'); cmp.placeholder = 'Paste their safety number to compare'; cmp.setAttribute('aria-label', 'Their safety number'); cmp.autocomplete = 'off'; cmp.spellcheck = false;
+        cmp.value = cmpVals[n] || ''; cmp.oninput = () => { cmpVals[n] = cmp.value; const norm = x => String(x).replace(/[^0-9a-f]/gi, '').toLowerCase(), v = norm(cmp.value); res.replaceChildren(); res.className = 'cmpres'; if (!v) return; if (v === norm(fpc[pub.x])) { res.classList.add('ok'); res.append('Match. This is the key we use for ' + n + '. '); if (tofu[n] && s !== 'verified') { const b = el('button', 'btn', 'Mark verified'); b.type = 'button'; b.onclick = () => { cmp.blur(); markVerified(n, true); }; res.append(b); } } else if (v.length >= norm(fpc[pub.x]).length) { res.classList.add('bad'); res.append('Does NOT match. Do not trust this key until you have checked with ' + n + ' in person or by phone.'); } else res.append('Keep typing...'); };
+        p.append(cmp, res); if (cmp.value) cmp.oninput();
         if (s === 'changed') { const b = el('button', 'btn', 'Trust new key'); b.type = 'button'; b.onclick = () => { E2E.pending[n] = E2E.pending[n] || fpc[pub.x]; trustKey(n); }; p.append(b); }
         else if (tofu[n]) { const b = el('button', 'btn', s === 'verified' ? 'Unmark' : 'Mark verified'); b.type = 'button'; b.onclick = () => markVerified(n, s !== 'verified'); p.append(b); }
         rows.push(p);
       }
       if (my === tok) list.replaceChildren(...rows);
     }
-    document.addEventListener('cn:state', () => { if (!body.closest('.wclosed')) render(); }); render();
+    document.addEventListener('cn:state', () => { if (!body.closest('.wclosed') && !(document.activeElement && document.activeElement.tagName === 'INPUT' && list.contains(document.activeElement))) render(); }); render();
   }
   function buildSettings(body) {
     body.classList.add('set');

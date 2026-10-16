@@ -1,5 +1,12 @@
 # Release notes
 
+## v0.8.0 - groups, diagnostics, key verification
+- Groups and communities: public or invite-only, roles owner / moderator / member enforced on the server, invite, remove, promote, rename, delete, discover and join; same message features as channels (reply, edit, reactions, pins, mute, persistent unread). Not end-to-end encrypted, labelled in the UI. Stored in `groups.json`
+- Terminal: all commands are real; new `diag` (server /healthz, HTTP and WebSocket latency, clock difference, secure context, key state), `ping` now also measures the WebSocket (new `ping`/`pong` protocol message). Monitor gets a WebSocket latency card and is labelled "simulated" in demo mode
+- Key verification: compare box in Security (paste the contact's safety number; match, mismatch or typing state; mark verified from the result). QR codes are not included (would need an extra library)
+- Tests: `npm test` 44, `npm run test:e2e` 16 (new: groups lifecycle in a browser, terminal diag/ping, safety number compare)
+- Not done: end-to-end encrypted groups (needs its own protocol), QR code key verification
+
 ## v0.7.0 - messaging and social
 - Messages: reply (server-built quote in channels, encrypted inside DMs), edit own, delete own DMs, emoji reactions (6 allowed), pinned channel messages (admin), per-conversation mute
 - Read receipts (can be turned off), persistent unread counts stored per conversation on the server

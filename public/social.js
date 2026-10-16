@@ -96,5 +96,50 @@ const Social = (function () {
     body.append(top, list); render(); views.alerts = { update: render };
   }
 
-  return { people, feed, alerts, onMsg(m) { Object.values(views).forEach(v => v.update(m)); } };
+  /* ---------- Groups ---------- */
+  function groups(body) {
+    body.classList.add('soc'); const manage = new Set(), arm = {};
+    const gname = el('input'), gdesc = el('input'), gpub = el('input'), msg = el('small', 'note'); gname.maxLength = 40; gname.placeholder = 'Group name'; gname.setAttribute('aria-label', 'Group name'); gdesc.maxLength = 200; gdesc.placeholder = 'Description (optional)'; gdesc.setAttribute('aria-label', 'Group description'); gpub.type = 'checkbox'; gpub.checked = true; gpub.id = 'gpub';
+    const pl = el('label', 'chk'); pl.htmlFor = 'gpub'; pl.append(gpub, ' Public: anyone can find and join');
+    const create = el('div', 'sbox'); create.append(gname, gdesc, pl, btn('Create group', () => { if (!gname.value.trim()) return; send({ t: 'gcreate', name: gname.value, desc: gdesc.value, pub: gpub.checked }); gname.value = ''; gdesc.value = ''; }), el('small', 'note', 'Groups are managed by the server and are not end-to-end encrypted.'));
+    const mine = el('div', 'glist'), q = el('input'), found = el('ul', 'plist'); q.type = 'search'; q.placeholder = 'Discover public groups'; q.setAttribute('aria-label', 'Find groups');
+    let t = 0; q.oninput = () => { clearTimeout(t); t = setTimeout(() => send({ t: 'gsearch', q: q.value }), 250); };
+    const confirmBtn = (key, txt, fn, cls) => { const b = btn(arm[key] ? 'Click again to confirm' : txt, () => { if (arm[key]) { delete arm[key]; fn(); } else { arm[key] = 1; renderMine(); setTimeout(() => { delete arm[key]; renderMine(); }, 4000); } }, cls); return b; };
+    function renderMine() {
+      mine.replaceChildren(); const list = Object.values(st.groups); if (!list.length) mine.append(el('p', 'empty', 'You are not in any group yet'));
+      list.forEach(g => {
+        const role = myRole('g:' + g.id), box = el('div', 'sbox'), top = el('div', 'row'), isMod = role === 'owner' || role === 'mod';
+        top.append(el('b', null, g.name), el('small', 'note', role + ' \u00B7 ' + g.members.length + ' member' + (g.members.length === 1 ? '' : 's') + (g.pub ? ' \u00B7 public' : ' \u00B7 invite-only')));
+        const acts = el('div', 'row'); acts.append(btn('Open', () => open('r', 'g:' + g.id)));
+        if (isMod) acts.append(btn(manage.has(g.id) ? 'Close manager' : 'Manage', () => { manage.has(g.id) ? manage.delete(g.id) : manage.add(g.id); renderMine(); }));
+        if (role !== 'owner') acts.append(confirmBtn('l' + g.id, 'Leave', () => send({ t: 'gleave', id: g.id }), 'bad'));
+        box.append(top); if (g.desc) box.append(el('small', 'note', g.desc)); box.append(acts);
+        if (isMod && manage.has(g.id)) {
+          const inv = el('input'); inv.placeholder = 'Invite by username'; inv.setAttribute('aria-label', 'Invite user'); const ir = el('div', 'row'); ir.append(inv, btn('Invite', () => { if (inv.value.trim()) { send({ t: 'ginvite', id: g.id, name: inv.value.trim() }); inv.value = ''; } })); box.append(ir);
+          const ul = el('ul'); g.members.forEach(m => {
+            const li = el('li'), info = el('div', 'pi'); info.append(el('b', null, m.n), el('small', null, m.r)); const a = el('div', 'acts');
+            if (m.r !== 'owner' && m.n !== st.me) {
+              if (role === 'owner') a.append(btn(m.r === 'mod' ? 'Make member' : 'Make mod', () => send({ t: 'grole', id: g.id, name: m.n, role: m.r === 'mod' ? 'member' : 'mod' })));
+              if (role === 'owner' || m.r === 'member') a.append(btn('Remove', () => send({ t: 'gkick', id: g.id, name: m.n }), 'bad'));
+            }
+            li.append(av(m.n), info, a); ul.append(li);
+          }); box.append(ul);
+          if (role === 'owner') {
+            const en = el('input'), ed = el('input'), ep = el('input'); en.value = g.name; ed.value = g.desc || ''; ep.type = 'checkbox'; ep.checked = g.pub; en.maxLength = 40; ed.maxLength = 200; en.setAttribute('aria-label', 'Rename group'); ed.setAttribute('aria-label', 'Group description'); const pr = el('label', 'chk'); pr.append(ep, ' Public');
+            const er = el('div', 'row'); er.append(btn('Save changes', () => send({ t: 'gedit', id: g.id, name: en.value, desc: ed.value, pub: ep.checked })), confirmBtn('d' + g.id, 'Delete group', () => send({ t: 'gdelete', id: g.id }), 'bad')); box.append(en, ed, pr, er);
+          }
+        }
+        mine.append(box);
+      });
+    }
+    function renderFound(list) {
+      found.replaceChildren(); if (!list.length) { found.append(el('li', 'empty', 'No public groups found')); return; }
+      list.forEach(g => { const li = el('li'), info = el('div', 'pi'); info.append(el('b', null, g.name), el('small', null, (g.desc ? g.desc + ' \u00B7 ' : '') + g.n + ' member' + (g.n === 1 ? '' : 's')));
+        li.append(info, g.member ? btn('Open', () => open('r', 'g:' + g.id)) : btn('Join', () => send({ t: 'gjoin', id: g.id }))); found.append(li); });
+    }
+    body.append(head('New group'), create, head('My groups'), mine, head('Discover'), q, found); renderMine(); renderFound([]); send({ t: 'gsearch', q: '' });
+    views.groups = { update(m) { if (m.t === 'gresults') renderFound(m.groups); else if (m.t === 'group' || m.t === 'gleave') { renderMine(); send({ t: 'gsearch', q: q.value }); } } };
+  }
+
+  return { people, feed, alerts, groups, onMsg(m) { Object.values(views).forEach(v => v.update(m)); } };
 })();

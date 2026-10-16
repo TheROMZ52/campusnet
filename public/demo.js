@@ -60,7 +60,7 @@
 
   class FakeWS {
     constructor() { this.readyState = 0; ws = this; setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, 250); }
-    send(raw) { let m; try { m = JSON.parse(raw); } catch { return; } if (m.t === 'bye') { clearInterval(timer); return; } handle(m); }
+    send(raw) { let m; try { m = JSON.parse(raw); } catch { return; } if (m.t === 'bye') { clearInterval(timer); return; } if (m.t === 'ping') { emit({ t: 'pong', id: m.id }); return; } handle(m); }
     close() { if (this.readyState === 3) return; this.readyState = 3; clearInterval(timer); setTimeout(() => this.onclose && this.onclose(), 0); }
   }
   window.WebSocket = FakeWS;

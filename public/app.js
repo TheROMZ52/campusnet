@@ -2,7 +2,8 @@
 /* CampusNet client. Protocol (unchanged): join/welcome, users, files, notices, msg, delmsg, dm, typing, status, admin, err. */
 const $ = s => document.querySelector(s);
 const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
-const st = { prefs: { following: [], blocked: [], muted: [], reads: {}, receipts: true }, profiles: {}, myProfile: { d: '', b: '', a: '' }, notifs: [], peerReads: {}, reply: null, editing: null, ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '', loginAdm: '' };
+const IS_DEMO = /[?&]demo\b/.test(location.search), pingWait = {};
+const st = { groups: {}, prefs: { following: [], blocked: [], muted: [], reads: {}, receipts: true }, profiles: {}, myProfile: { d: '', b: '', a: '' }, notifs: [], peerReads: {}, reply: null, editing: null, ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '', loginAdm: '' };
 st.lat = []; st.t0 = 0;
 let chain = Promise.resolve();
 const key = c => c.k + ':' + c.id;
@@ -149,12 +150,14 @@ function setUsers(list, all) { st.users = list.map(u => u.n); st.status = {}; li
 const viz = () => { if (window.NetViz) NetViz.update({ me: st.me, users: st.users.map(n => ({ n, s: st.status[n] })) }); };
 if (window.NetViz) NetViz.onPick = n => open('d', n);
 
-/* latency probe: real round trip to the server */
+/* WebSocket round trip: resolves to milliseconds, or null when there is no reply within 3 s */
+function wsPing() { return new Promise(res => { if (!st.ws || st.ws.readyState !== 1) return res(null); const id = Math.random().toString(36).slice(2, 10); pingWait[id] = { t0: performance.now(), res }; send({ t: 'ping', id }); setTimeout(() => { if (pingWait[id]) { delete pingWait[id]; res(null); } }, 3000); }); }
+/* latency probe: real round trips to the server (HTTP and WebSocket) */
 setInterval(async () => {
   if ($('#app').hidden || document.hidden || !st.ws || st.ws.readyState !== 1) return;
   const t0 = performance.now();
   try { await fetch('/api/info', { cache: 'no-store' }); const ms = Math.round(performance.now() - t0); st.lat.push(ms); $('#lat').textContent = ms + ' ms'; } catch { st.lat.push(null); $('#lat').textContent = '-- ms'; }
-  if (st.lat.length > 60) st.lat.shift(); emitUI('state');
+  st.wsLat = await wsPing(); if (st.lat.length > 60) st.lat.shift(); emitUI('state');
 }, 8000);
 
 async function handle(m) {
@@ -165,7 +168,7 @@ async function handle(m) {
       try { await fetch('/api/session', { method: 'POST', headers: { 'x-token': m.token } }); } catch { /* downloads need this cookie */ }
       st.me = m.me; st.token = m.token; sessionStorage.setItem('cn:token', m.token); st.admin = m.admin; st.mode = 'login';
       st.rooms = m.rooms; st.hist = m.hist; st.dms = dmsDec; st.notices = m.notices || []; st.files = m.files; st.maxMB = m.maxMB; setUsers(m.users, m.all);
-      st.prefs = Object.assign({ following: [], blocked: [], muted: [], reads: {}, receipts: true }, m.prefs || {}); st.profiles = m.profiles || {}; st.myProfile = m.myProfile || { d: '', b: '', a: '' }; st.notifs = m.notifs || []; st.peerReads = m.peerReads || {}; st.reply = null; st.editing = null; initUnread();
+      st.prefs = Object.assign({ following: [], blocked: [], muted: [], reads: {}, receipts: true }, m.prefs || {}); st.profiles = m.profiles || {}; st.myProfile = m.myProfile || { d: '', b: '', a: '' }; st.notifs = m.notifs || []; st.peerReads = m.peerReads || {}; st.reply = null; st.editing = null; st.groups = {}; (m.groups || []).forEach(addGroup); initUnread();
       clearTimeout(reconnectTimer); clearInterval(countdownTimer); $('#linkbar').hidden = true;
       if (st.retry) toast('Link restored', 'ok', 2200); st.retry = 0;
       gateLog('[+] access granted', 'ok'); setBusy(false); $('#login').hidden = true; $('#app').hidden = false;
@@ -179,10 +182,13 @@ async function handle(m) {
     case 'users': setUsers(m.users, m.all); renderUsers(); break;
     case 'files': { const added = m.files.length > st.files.length; st.files = m.files; renderFiles(); if (added && document.body.dataset.tab !== 'files') bump('tbFiles'); break; }
     case 'notices': { const more = m.notices.length > st.notices.length; st.notices = m.notices; if (st.cur.k === 'b') renderLog(); else if (more) { st.unread['b:board'] = (st.unread['b:board'] || 0) + 1; renderRooms(); tabBadges(); toast('New notice on the board', 'warn'); } break; }
-    case 'msg': if ((st.hist[m.m.room] || []).some(x => x.id === m.m.id) || (m.m.kind !== 'sys' && isBlocked(m.m.from))) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
+    case 'msg': if (!st.hist[m.m.room] || st.hist[m.m.room].some(x => x.id === m.m.id) || (m.m.kind !== 'sys' && isBlocked(m.m.from))) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
     case 'delmsg': { const a = st.hist[m.room]; if (a) { const i = a.findIndex(x => x.id === m.id); if (i >= 0) a.splice(i, 1); } const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
     case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other) && !isMuted('d:' + other)) beep(); break; }
     case 'key': { E2E.keys[m.name] = m.pub; delete E2E.shared[m.name]; delete E2E.state[m.name]; if (m.name !== st.me) CN.fingerprint(m.pub).then(fp => { const t = tofu[m.name]; if (t && t.fp !== fp) { E2E.state[m.name] = 'changed'; E2E.pending[m.name] = fp; toast('Safety number of ' + m.name + ' changed', 'warn', 7000); } emitUI('state'); e2eBadge(); }); break; }
+    case 'pong': { const w = pingWait[m.id]; if (w) { delete pingWait[m.id]; w.res(Math.round(performance.now() - w.t0)); } break; }
+    case 'group': { addGroup(m.g); renderRooms(); if (key(st.cur) === 'r:g:' + m.g.id) { renderLog(); renderPins(); } break; }
+    case 'gleave': { delete st.groups[m.id]; delete st.hist['g:' + m.id]; if (key(st.cur) === 'r:g:' + m.id) open('r', st.rooms[0] || 'general'); else renderRooms(); break; }
     case 'upd': { const a = st.hist[m.room], i = a ? a.findIndex(x => x.id === m.m.id) : -1; if (i >= 0) a[i] = m.m; if (st.cur.k === 'r' && st.cur.id === m.room) { updateRow(m.m); renderPins(); } break; }
     case 'dmupd': { const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from, a = st.dms[other], i = a ? a.findIndex(x => x.id === dm.id) : -1; if (i >= 0) a[i] = dm; if (st.cur.k === 'd' && same(st.cur.id, other)) updateRow(dm); break; }
     case 'dmdel': { const other = same(m.a, st.me) ? m.b : m.a, a = st.dms[other], i = a ? a.findIndex(x => x.id === m.id) : -1; if (i >= 0) a.splice(i, 1); const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
@@ -200,7 +206,7 @@ async function handle(m) {
       } else { local(m.text, true); toast(m.text, 'bad'); }
       break;
   }
-  if (typeof Social !== 'undefined' && /^(prefs|profile|notif|results|feed|post|plike|pdel)$/.test(m.t)) Social.onMsg(m);
+  if (typeof Social !== 'undefined' && /^(prefs|profile|notif|results|feed|post|plike|pdel|group|gleave|gresults)$/.test(m.t)) Social.onMsg(m);
   emitUI('state');
 }
 function incoming(k, msg, from) {
@@ -255,15 +261,18 @@ const REACTS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE02', '\uD83D\uDE2E', 
 const snip = t => String(t || '').replace(/\s+/g, ' ').slice(0, 80);
 const convRef = m => m.room ? { room: m.room } : { to: m.from === st.me ? m.to : m.from };
 const cleanReply = r => (r && typeof r === 'object' && typeof r.text === 'string') ? { id: String(r.id || '').slice(0, 24), from: String(r.from || '').slice(0, 40), text: snip(r.text) } : undefined;
+function addGroup(g) { const { hist, ...meta } = g; st.groups[g.id] = meta; st.hist['g:' + g.id] = hist || []; }
+const myRole = room => ((((st.groups[room.slice(2)] || {}).members) || []).find(x => x.n === st.me) || {}).r;
+const canMod = room => room.startsWith('g:') ? ['owner', 'mod'].includes(myRole(room)) : !!st.admin;
 const isBlocked = n => st.prefs.blocked.includes(String(n).toLowerCase());
 const isMuted = k => st.prefs.muted.includes(String(k).toLowerCase());
-function notifText(n) { const t = { follow: 'started following you', like: 'liked your post', react: 'reacted ' + n.text, reply: 'replied: ' + n.text, mention: 'mentioned you: ' + n.text }[n.type]; return n.from + ' ' + (t || n.text || ''); }
+function notifText(n) { const t = { follow: 'started following you', like: 'liked your post', react: 'reacted ' + n.text, reply: 'replied: ' + n.text, mention: 'mentioned you: ' + n.text, invite: n.text }[n.type]; return n.from + ' ' + (t || n.text || ''); }
 function rowActions(m) {
   const box = el('span', 'ra'), add = (txt, label, fn) => { const b = el('button', 'ra-b', txt); b.type = 'button'; b.setAttribute('aria-label', label); b.title = label; b.onclick = e => { e.stopPropagation(); fn(b); }; box.append(b); };
   add('\u21A9', 'Reply', () => startReply(m)); add('\u263A', 'React', b => reactPicker(m, b));
   if (m.from === st.me) add('\u270E', 'Edit message', () => startEdit(m));
-  if (m.room && st.admin) add(m.pinned ? '\u25C6' : '\u25C7', m.pinned ? 'Unpin message' : 'Pin message', () => send({ t: 'pin', room: m.room, id: m.id, on: !m.pinned }));
-  if (m.from === st.me || (m.room && st.admin)) add('\u00D7', 'Delete message', () => send(m.room ? { t: 'delmsg', room: m.room, id: m.id } : { t: 'deldm', to: m.to === st.me ? m.from : m.to, id: m.id }));
+  if (m.room && canMod(m.room)) add(m.pinned ? '\u25C6' : '\u25C7', m.pinned ? 'Unpin message' : 'Pin message', () => send({ t: 'pin', room: m.room, id: m.id, on: !m.pinned }));
+  if (m.from === st.me || (m.room && canMod(m.room))) add('\u00D7', 'Delete message', () => send(m.room ? { t: 'delmsg', room: m.room, id: m.id } : { t: 'deldm', to: m.to === st.me ? m.from : m.to, id: m.id }));
   return box;
 }
 function reactPicker(m, anchor) {
@@ -328,7 +337,7 @@ function renderLog() {
     return;
   }
   const list = st.cur.k === 'r' ? (st.hist[st.cur.id] || []) : (st.dms[st.cur.id] || []);
-  $('#convTitle').textContent = st.cur.k === 'r' ? '# ' + st.cur.id : 'private \u00B7 ' + st.cur.id;
+  $('#convTitle').textContent = st.cur.k === 'r' ? (st.cur.id.startsWith('g:') ? '\u25C7 ' + ((st.groups[st.cur.id.slice(2)] || {}).name || 'group') + ' \u00B7 group \u00B7 not end-to-end encrypted' : '# ' + st.cur.id) : 'private \u00B7 ' + st.cur.id;
   if (!list.length) log.append(emptyState('radar', 'Quiet on this channel', st.cur.k === 'r' ? 'No transmissions yet. Say something.' : 'End-to-end encrypted: only you and ' + st.cur.id + ' can read this.'));
   list.filter(m => m.kind === 'sys' || !isBlocked(m.from)).forEach(m => addRow(m)); scrollEnd(); showTyping();
 }
@@ -342,6 +351,7 @@ function renderRooms() {
   const ul = $('#rooms'); ul.replaceChildren();
   ul.append(item(st.cur.k === 'b', el('span', 'g', '\u25C8'), 'Broadcast board', st.unread['b:board'], () => open('b', 'board')));
   st.rooms.forEach(r => ul.append(item(key(st.cur) === 'r:' + r, el('span', 'g', '#'), r, st.unread['r:' + r], () => open('r', r))));
+  Object.values(st.groups).forEach(g => ul.append(item(key(st.cur) === 'r:g:' + g.id, el('span', 'g', '\u25C7'), g.name, st.unread['r:g:' + g.id], () => open('r', 'g:' + g.id))));
 }
 function renderUsers() {
   const ul = $('#users'); ul.replaceChildren(); $('#ucount').textContent = st.users.length + ' online'; $('#sbNodes').textContent = st.users.length;

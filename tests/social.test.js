@@ -71,7 +71,7 @@ describe('room messaging: reply, edit, reactions, pin, mentions', () => {
   });
   it('pin is admin-only', async () => {
     b.c.send({ t: 'pin', room: 'general', id: first.id, on: true });
-    await b.c.wait(x => x.t === 'err' && /admins can pin/.test(x.text));
+    await b.c.wait(x => x.t === 'err' && /can pin messages/.test(x.text));
     boss.c.send({ t: 'pin', room: 'general', id: first.id, on: true });
     await a.c.wait(x => x.t === 'upd' && x.m.id === first.id && x.m.pinned === true);
   });

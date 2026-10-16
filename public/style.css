@@ -498,3 +498,8 @@ body.os #log{grid-column:2;grid-row:2}body.os #typing{grid-column:2;grid-row:3}b
 .soc .empty{justify-content:center;color:var(--faint);border:0}
 .soc .post .ph2{display:flex;align-items:center;gap:8px}
 .soc .post p{margin:0;white-space:pre-wrap;word-break:break-word}
+
+.soc .glist{display:flex;flex-direction:column;gap:8px}
+.soc .sbox .note{font-size:12px}
+.sec .peer input{width:100%;margin-top:6px;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:var(--r);padding:5px 8px;font:12px var(--mono)}
+.cmpres{display:block;margin-top:4px;color:var(--faint)}.cmpres.ok{color:var(--neon)}.cmpres.bad{color:var(--bad)}
