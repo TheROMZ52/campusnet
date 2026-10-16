@@ -193,3 +193,15 @@ describe('persistence across restart', () => {
     a2.c.ws.close(); b2.c.ws.close(); await s.stop();
   });
 });
+
+describe('blocked people never reach you in channels', () => {
+  it('live messages and welcome history are filtered on the server', async () => {
+    const s = await startServer(); const a = await reg(s, 'alice'), b = await reg(s, 'bob'), c = await reg(s, 'carol');
+    a.c.send({ t: 'block', name: 'bob', on: true }); await a.c.wait(x => x.t === 'prefs' && x.blocked);
+    b.c.send({ t: 'msg', room: 'general', text: 'from-bob-live' }); await c.c.wait(x => x.t === 'msg' && x.m.text === 'from-bob-live'); await sleep(300);
+    assert.ok(!has(a.c, x => x.t === 'msg' && x.m.text === 'from-bob-live'), 'live message hidden for the blocker');
+    const w = await signin(s, 'alice', PW); assert.ok(!JSON.stringify(w.m.hist).includes('from-bob-live'), 'history hidden too'); w.c.ws.close();
+    const w2 = await signin(s, 'carol', PW); assert.ok(JSON.stringify(w2.m.hist).includes('from-bob-live'), 'others still see it'); w2.c.ws.close();
+    [a, b, c].forEach(x => x.c.ws.close()); await s.stop();
+  });
+});

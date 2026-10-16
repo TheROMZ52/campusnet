@@ -4,7 +4,7 @@
 const Social = (function () {
   const views = {};
   const av = name => {
-    const p = same(name, st.me) ? st.myProfile : (st.profiles[name] || null), s = el('span', 'av');
+    const p = same(name, st.me) ? st.myProfile : (st.profiles[name] || null), s = el('span', 'pav');
     if (p && p.a) { const i = el('img'); i.alt = ''; i.src = p.a; s.append(i); } else s.textContent = String(name || '?')[0].toUpperCase();
     return s;
   };
@@ -27,17 +27,20 @@ const Social = (function () {
     bio.maxLength = 200; bio.rows = 2; bio.placeholder = 'Short bio'; bio.setAttribute('aria-label', 'Bio');
     rc.type = 'checkbox'; rc.id = 'rcpt'; file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp'; file.hidden = true;
     const rl = el('label', 'chk'); rl.htmlFor = 'rcpt'; rl.append(rc, ' Let others see when I have read their messages');
-    const fillMine = () => { pv.replaceChildren(av(st.me)); name.value = st.myProfile.d || ''; bio.value = st.myProfile.b || ''; rc.checked = st.prefs.receipts !== false; avatar = undefined; };
-    file.onchange = async () => { try { avatar = await fitAvatar(file.files[0]); pv.replaceChildren(Object.assign(el('span', 'av'), {})); const i = el('img'); i.alt = ''; i.src = avatar; pv.firstChild.append(i); } catch (e) { toast(e.message, 'bad'); } file.value = ''; };
-    const save = btn('Save profile', () => { const o = { t: 'profile', display: name.value, bio: bio.value, receipts: rc.checked }; if (avatar !== undefined) o.avatar = avatar; send(o); msg.textContent = 'Saved'; });
-    const row = el('div', 'row'); row.append(btn('Change photo', () => file.click()), btn('Remove photo', () => { avatar = ''; pv.replaceChildren(Object.assign(el('span', 'av'), { textContent: st.me[0].toUpperCase() })); }), file);
-    const mine = el('div', 'sbox'); mine.append(pv, name, bio, row, rl, save, msg);
+    const fillMine = () => { fillSongs(); pv.replaceChildren(av(st.me)); name.value = st.myProfile.d || ''; bio.value = st.myProfile.b || ''; rc.checked = st.prefs.receipts !== false; avatar = undefined; };
+    file.onchange = async () => { try { avatar = await fitAvatar(file.files[0]); pv.replaceChildren(Object.assign(el('span', 'pav'), {})); const i = el('img'); i.alt = ''; i.src = avatar; pv.firstChild.append(i); } catch (e) { toast(e.message, 'bad'); } file.value = ''; };
+    const save = btn('Save profile', () => { const o = { t: 'profile', display: name.value, bio: bio.value, receipts: rc.checked, music: song.value }; if (avatar !== undefined) o.avatar = avatar; send(o); msg.textContent = 'Saved'; });
+    const row = el('div', 'row'); row.append(btn('Change photo', () => file.click()), btn('Remove photo', () => { avatar = ''; pv.replaceChildren(Object.assign(el('span', 'pav'), { textContent: st.me[0].toUpperCase() })); }), file);
+    const song = el('select'); song.setAttribute('aria-label', 'Profile song'); const sl = el('label', 'chk', 'Profile song'); sl.append(song);
+    const fillSongs = () => { const cur = (st.myProfile.m || {}).id || '', want = ['', ...Music.tracks().map(t => t.id)].join(), have = [...song.options].map(o => o.value).join(); if (want === have && song.value === cur) return; song.replaceChildren(new Option('None', '')); Music.tracks().forEach(t => song.append(new Option(Music.label(t).artist + ' - ' + Music.label(t).title, t.id))); song.value = cur; };
+    document.addEventListener('cn:state', () => { if (document.activeElement !== song && song.isConnected) fillSongs(); });
+    const mine = el('div', 'sbox'); mine.append(pv, name, bio, sl, row, rl, save, msg);
     const q = el('input'); q.type = 'search'; q.placeholder = 'Find people by name'; q.setAttribute('aria-label', 'Find people'); const out = el('ul', 'plist');
     let t = 0; q.oninput = () => { clearTimeout(t); t = setTimeout(() => send({ t: 'search', q: q.value }), 250); };
     function render(list) {
       out.replaceChildren(); if (!list.length) { out.append(el('li', 'empty', q.value.trim() ? 'No one found' : 'Type a name to search')); return; }
       list.forEach(u => {
-        const li = el('li'), info = el('div', 'pi'); info.append(el('b', null, u.n + (u.d ? ' \u00B7 ' + u.d : '')), el('small', null, (u.b || '') + (u.b ? ' \u00B7 ' : '') + u.fo + ' follower' + (u.fo === 1 ? '' : 's')));
+        const li = el('li'), info = el('div', 'pi'); info.append(el('b', null, u.n + (u.d ? ' \u00B7 ' + u.d : '')), el('small', null, (u.b || '') + (u.b ? ' \u00B7 ' : '') + u.fo + ' follower' + (u.fo === 1 ? '' : 's'))); if (u.m) { const lb = Music.label({ name: u.m.n, owner: u.n }); const mrow = el('div', 'row'); mrow.append(btn('\u25B6 ' + lb.artist + ' - ' + lb.title, () => Music.play(u.m.id))); info.append(mrow); }
         const acts = el('div', 'acts');
         if (!same(u.n, st.me)) {
           acts.append(btn('Message', () => open('d', u.n)),
@@ -137,9 +140,9 @@ const Social = (function () {
       list.forEach(g => { const li = el('li'), info = el('div', 'pi'); info.append(el('b', null, g.name), el('small', null, (g.desc ? g.desc + ' \u00B7 ' : '') + g.n + ' member' + (g.n === 1 ? '' : 's')));
         li.append(info, g.member ? btn('Open', () => open('r', 'g:' + g.id)) : btn('Join', () => send({ t: 'gjoin', id: g.id }))); found.append(li); });
     }
-    body.append(head('New group'), create, head('My groups'), mine, head('Discover'), q, found); renderMine(); renderFound([]); send({ t: 'gsearch', q: '' });
+    body.append(head('New group'), create, head('My groups'), mine, head('Discover', btn('Refresh', () => send({ t: 'gsearch', q: q.value }))), q, found); renderMine(); renderFound([]); send({ t: 'gsearch', q: '' });
     views.groups = { update(m) { if (m.t === 'gresults') renderFound(m.groups); else if (m.t === 'group' || m.t === 'gleave') { renderMine(); send({ t: 'gsearch', q: q.value }); } } };
   }
 
-  return { people, feed, alerts, groups, onMsg(m) { Object.values(views).forEach(v => v.update(m)); } };
+  return { people, feed, alerts, groups, onMsg(m) { Object.values(views).forEach(v => v.update(m)); if (typeof Home !== 'undefined') Home.onMsg(m); } };
 })();

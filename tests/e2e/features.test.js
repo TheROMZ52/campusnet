@@ -34,7 +34,10 @@ describe('v0.7 features in a real browser', () => {
     await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 8000 });
     for (const a of apps) { const t = page.locator('#launcher button[aria-label="Open ' + a + '"]'); if (await t.count()) await t.click(); }
   }
-  async function relogin(page, name, apps = ['Messages']) { await page.reload(); await page.waitForSelector('#loginForm', { state: 'visible' }); await page.fill('#nameIn', name); await page.fill('#pwIn', PW); await page.click('#goBtn'); await up(page, name, apps); }
+  async function relogin(page, name, apps = ['Messages']) {   // reload keeps the session; only the encryption key needs the password again
+    await page.reload(); await up(page, name, apps); const bar = page.locator('#unlockBar');
+    if (await bar.isVisible()) { await page.fill('#unlockPw', PW); await page.keyboard.press('Enter'); await bar.waitFor({ state: 'hidden' }); await up(page, name, apps); }
+  }
   const say = async (page, text) => { await page.fill('#inp', text); await page.keyboard.press('Enter'); };
   const row = (page, text) => page.locator('#log .msg', { hasText: text }).first();
   const act = async (page, text, label) => { const r = row(page, text); await r.hover(); await r.locator(`.ra-b[aria-label="${label}"]`).click(); };

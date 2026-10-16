@@ -1,5 +1,16 @@
 # Release notes
 
+## v0.9.0 - Home, Music, reload and Back
+- New **Home** page (first window of a fresh desktop and the target of Back): live counters, shortcuts, now playing, unread, alerts, latest posts, announcement
+- New **Music** app: shared audio library, upload, streaming with HTTP byte ranges (seek), shuffle/repeat/volume, system media controls, keeps playing when closed. **Profile song** shown to others in People
+- **Reload fixed**: the session continues after a refresh, the open conversation is restored, only the encryption key asks for the password again (unlock bar). Unread counts include still-locked DMs. Boot animation is skipped on resume. A stale session falls back to the login screen with a message
+- **Back/Forward fixed**: in-app history (conversations and Home), the browser never leaves the app; deep links `#/c/d/<user>`, `#/c/r/<room>`
+- Fixes: my avatar style clashed with the header avatar (5 px sideways scroll on phones), blocked users' channel messages are now filtered on the server (live and history), Groups > Discover has a Refresh button
+- CI: GitHub Actions runs `npm test` and `npm run test:e2e`
+- Server: `?audio=1` downloads (206/416 ranges, audio content types, inline), `aud` flag on files, `music` in profiles
+- Tests: `npm test` 50, `npm run test:e2e` 20 (new: Home content, music upload/playback/profile song, reload + unlock + Back)
+- Not done: QR code key verification (needs an encoder library), end-to-end encrypted groups (needs a protocol design), a Home layout for phones that opens by default
+
 ## v0.8.0 - groups, diagnostics, key verification
 - Groups and communities: public or invite-only, roles owner / moderator / member enforced on the server, invite, remove, promote, rename, delete, discover and join; same message features as channels (reply, edit, reactions, pins, mute, persistent unread). Not end-to-end encrypted, labelled in the UI. Stored in `groups.json`
 - Terminal: all commands are real; new `diag` (server /healthz, HTTP and WebSocket latency, clock difference, secure context, key state), `ping` now also measures the WebSocket (new `ping`/`pong` protocol message). Monitor gets a WebSocket latency card and is labelled "simulated" in demo mode

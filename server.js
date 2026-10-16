@@ -33,6 +33,8 @@ if (ADMIN_USERS.length && !ADMIN) bail('ADMIN_USERS requires ADMIN_CODE (an admi
 const ROOMS = ['general', 'random', 'help'];
 const RESERVED = new Set(['system', 'admin', 'administrator', 'root', 'server', 'campusnet', 'moderator', 'mod', 'null', 'undefined']);
 const WEAK = new Set(['password', 'password1', '12345678', '123456789', '1234567890', 'qwertyui', 'qwerty123', '11111111', '00000000', 'iloveyou', 'abcdefgh', 'letmein1']);
+const AUDIOT = { mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', weba: 'audio/webm' };
+const AUD = /\.(mp3|ogg|oga|opus|wav|m4a|aac|flac|weba)$/i;
 const IMGT = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
 const IMG = /\.(png|jpe?g|gif|webp)$/i;
 const NAME_RE = /^[\p{L}\p{N}_.-]{2,20}$/u;
@@ -107,7 +109,9 @@ const roleOf = (g, name) => (g && typeof name === 'string') ? g.members[ukey(nam
 const roomOk = (room, who) => (typeof room === 'string' && ROOMS.includes(room)) || !!(who && roleOf(groupOf(room), who));
 const histOf = room => groupOf(room) ? groupOf(room).hist : hist[room];
 const saveRoom = room => groupOf(room) ? save('groups.json', groups) : save('messages.json', hist);
-const toRoom = (room, o) => { const g = groupOf(room); if (!g) return bcast(o); Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, o); }); };
+const hidesFrom = (u, from) => !!(u && from && (u.blocked || []).includes(ukey(from)));   // people you blocked never reach you in channels
+const histFor = u => { const b = u.blocked || []; if (!b.length) return hist; return Object.fromEntries(Object.entries(hist).map(([r, a]) => [r, a.filter(x => !b.includes(ukey(x.from)))])); };
+const toRoom = (room, o) => { const g = groupOf(room); if (!g) { if ((o.t === 'msg' || o.t === 'upd') && o.m) { online().forEach(x => { if (!hidesFrom(urec(x.name), o.m.from)) send(x.ws, o); }); return; } return bcast(o); } Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, o); }); };
 const canMod = (room, s) => { const g = groupOf(room); if (!g) return !!s.admin; const r = roleOf(g, s.name); return r === 'owner' || r === 'mod'; };
 const gview = g => ({ id: g.id, name: g.name, desc: g.desc, pub: g.pub, owner: (users[g.owner] || {}).name || '', members: Object.entries(g.members).filter(([k]) => users[k]).map(([k, r]) => ({ n: users[k].name, r })), hist: g.hist });
 const pushGroup = g => Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, { t: 'group', g: gview(g) }); });
@@ -121,8 +125,9 @@ function notify(to, o) {
   arr.unshift(n); if (arr.length > 100) arr.length = 100; save('notifs.json', notifs);
   const t = findByName(u.name); if (t) send(t.ws, { t: 'notif', n });
 }
-const pubProfile = u => { const p = u.profile || {}; return { d: p.display || '', b: p.bio || '', a: p.avatar || '' }; };
-const profilesMap = () => { const o = {}; Object.values(users).forEach(u => { if (u.profile && (u.profile.display || u.profile.bio || u.profile.avatar)) o[u.name] = pubProfile(u); }); return o; };
+const musicOf = id => { const f = id && files.find(x => x.id === id); return f && AUD.test(f.name) ? { id: f.id, n: f.name } : null; };
+const pubProfile = u => { const p = u.profile || {}; return { d: p.display || '', b: p.bio || '', a: p.avatar || '', m: musicOf(p.music) }; };
+const profilesMap = () => { const o = {}; Object.values(users).forEach(u => { if (u.profile && (u.profile.display || u.profile.bio || u.profile.avatar || musicOf(u.profile.music))) o[u.name] = pubProfile(u); }); return o; };
 const prefsOf = u => ({ following: u.following || [], blocked: u.blocked || [], muted: u.muted || [], reads: u.reads || {}, receipts: !(u.profile && u.profile.receipts === false) });
 function peerReadsFor(name) {
   const o = {}, me = ukey(name); for (const other of Object.keys(dmsFor(name))) { const r = urec(other); if (r && !(r.profile && r.profile.receipts === false) && r.reads && r.reads['d:' + me]) o[r.name] = r.reads['d:' + me]; } return o;
@@ -158,7 +163,7 @@ const userList = () => online().map(s => ({ n: s.name, s: s.status || 'online' }
 const allNames = () => Object.values(users).map(u => u.name).sort((a, b) => a.localeCompare(b));
 const publicKeys = () => { const o = {}; Object.values(users).forEach(u => { if (u.pub) o[u.name] = u.pub; }); return o; };
 const pushUsers = () => bcast({ t: 'users', users: userList(), all: allNames() });
-const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts, img: IMG.test(name) }));
+const publicFiles = () => files.map(({ id, name, size, owner, ts }) => ({ id, name, size, owner, ts, img: IMG.test(name), aud: AUD.test(name) }));
 function addRoomMsg(room, from, text, kind, extra) {
   const g = groupOf(room); if (!g && !ROOMS.includes(room)) return;
   const m = { id: uid(), room, from, text, ts: Date.now(), kind, ...extra }, arr = histOf(room);
@@ -233,11 +238,21 @@ function handleDownload(req, res, url, id) {
   const f = files.find(x => x.id === id);
   if (!f) return json(res, 404, { error: 'not found' });
   const ext = ((f.name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
-  const inline = url.searchParams.get('inline') === '1' && IMGT[ext];
-  const st = fs.createReadStream(path.join(UP, f.id));
+  const inline = url.searchParams.get('inline') === '1' && IMGT[ext], audio = url.searchParams.get('audio') === '1' && AUDIOT[ext];
+  let start = 0, end = f.size - 1, code = 200;
+  if (audio && req.headers.range) {   // streaming playback needs byte ranges for seeking
+    const mm = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+    if (mm && (mm[1] || mm[2])) {
+      if (mm[1]) { start = +mm[1]; if (mm[2]) end = Math.min(end, +mm[2]); } else start = Math.max(0, f.size - +mm[2]);
+      if (start > end || start >= f.size) { res.writeHead(416, { 'Content-Range': 'bytes */' + f.size, ...SEC }); return res.end(); }
+      code = 206;
+    }
+  }
+  const st = fs.createReadStream(path.join(UP, f.id), audio ? { start, end } : undefined);
   st.on('error', e => { log('ERROR', 'download failed: ' + e.message); if (!res.headersSent) json(res, 410, { error: 'file is no longer available' }); else res.destroy(); });
   st.on('open', () => {
-    res.writeHead(200, { 'Content-Type': inline ? IMGT[ext] : 'application/octet-stream', 'Content-Length': f.size, 'Cache-Control': 'private, no-store', 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name)}`, ...SEC, ...(inline ? { 'Content-Security-Policy': "default-src 'none'; sandbox" } : {}) });
+    const disp = `${inline || audio ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name)}`;
+    res.writeHead(code, { 'Content-Type': audio ? AUDIOT[ext] : inline ? IMGT[ext] : 'application/octet-stream', 'Content-Length': audio ? end - start + 1 : f.size, ...(audio ? { 'Accept-Ranges': 'bytes' } : {}), ...(code === 206 ? { 'Content-Range': `bytes ${start}-${end}/${f.size}` } : {}), 'Cache-Control': 'private, no-store', 'Content-Disposition': disp, ...SEC, ...(inline || audio ? { 'Content-Security-Policy': "default-src 'none'; sandbox" } : {}) });
     st.pipe(res);
   });
   res.on('close', () => st.destroy());
@@ -325,7 +340,7 @@ async function doJoin(ws, m) {
   if (ws.readyState !== 1) { return; }
   clearTimeout(ws.joinTimer); s.ws = ws; ws.s = s;
   const rec = users[s.name.toLowerCase()] || {};
-  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist, dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, groups: myGroups(s.name), profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name) });
+  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist: histFor(rec), dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, groups: myGroups(s.name), profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name) });
   pushUsers();
   addRoomMsg('general', 'system', `${s.name} connected`, 'sys');
 }
@@ -416,7 +431,8 @@ function onMessage(ws, m) {
   } else if (m.t === 'profile') {
     const u = urec(s.name); if (!u) return; const av = m.avatar === undefined ? (u.profile || {}).avatar || '' : m.avatar;
     if (typeof av !== 'string' || (av && (av.length > 8000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(av)))) return send(ws, { t: 'err', text: 'Avatar must be a small png/jpeg/webp image.' });
-    u.profile = { display: line(m.display, 30), bio: line(m.bio, 200), avatar: av, receipts: m.receipts !== false };
+    const music = m.music === undefined ? (u.profile || {}).music || '' : (typeof m.music === 'string' && musicOf(m.music) ? m.music : '');
+    u.profile = { display: line(m.display, 30), bio: line(m.bio, 200), avatar: av, receipts: m.receipts !== false, music };
     save('users.json', users); bcast({ t: 'profile', name: u.name, p: pubProfile(u) }); send(ws, { t: 'prefs', receipts: u.profile.receipts });
   } else if (m.t === 'search') {
     const q = line(m.q, 30).toLowerCase(), me = urec(s.name); if (!q) return send(ws, { t: 'results', q: '', users: [] });

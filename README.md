@@ -27,6 +27,13 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Home, Music, reload and Back (v0.9)
+- **Home** is the first window on a fresh desktop: greeting, live counters, shortcuts to every app, the player, unread conversations, alerts, latest posts and the newest announcement. It is also what Back lands on.
+- **Music** is a separate app. Every audio file shared on the network (mp3, ogg, opus, wav, m4a, aac, flac) is in the library; upload from the Music window, play, seek, shuffle, repeat, volume. The player keeps playing when the window is closed and the track shows in the system media controls. Playback streams from the server with HTTP byte ranges. Pick a **profile song** (Music or People > Your profile): others see it on your profile in People search and can play it. A deleted file disappears from profiles.
+- **Reload:** the session survives a page reload (the token lives in the tab's sessionStorage). Your encryption key does not: after a reload a bar asks for your password to unlock encrypted messages, until then DMs show as locked and are still counted as unread. The open conversation is restored. If the server restarted, you are asked to sign in again.
+- **Back/Forward** move between conversations and Home and never leave the app; links like `#/c/d/alice` or `#/c/r/general` open that conversation.
+- Blocked people never reach you in channels: the server filters live messages and history for you.
+
 ## Messaging and social (v0.7)
 - **Messages:** reply, edit (own), delete (own; admins can delete channel messages), emoji reactions, pinned channel messages (admins, max 5 per channel), per-conversation mute. Hover a message (always visible on touch screens) for its actions. `Esc` cancels reply/edit. Replies and edits in direct messages are encrypted like the message itself.
 - **Read receipts and unread:** each conversation stores a "read up to" time on the server, so unread badges survive reloads and other devices. Direct messages show a check mark when sent and two when the other person has read them. You can turn receipts off in People > Your profile (then you neither send nor see them).
@@ -97,6 +104,7 @@ What is in place:
 - **Uploads:** size and per-user and total quotas are enforced while streaming (also for concurrent uploads), stalled uploads are cut, partial files are removed.
 - **Server robustness:** WebSocket origin check, per-IP connection limit, sign-in timeout, message rate limit, handler errors contained, `/healthz`, graceful shutdown (data flushed on SIGTERM).
 - **Direct messages:** end-to-end encrypted in the browser (ECDH P-256 + AES-GCM). The private key is stored locked with your password. The server stores and forwards ciphertext only. Keys are trusted on first use (TOFU); in Security, paste your contact's safety number into the compare box to verify them. Public rooms, the board and files are **not** end-to-end encrypted.
+- **Music:** audio files are ordinary shared files, readable by every signed-in user; the audio stream endpoint checks the same session cookie and never serves non-audio files inline.
 - **Social data:** profiles, posts, follows, blocks, read positions and notifications are stored in plain JSON on the server and visible to the operator. Avatars are accepted only as small png/jpeg/webp data URLs (never SVG). All user text is inserted as plain text, never as HTML. Blocks are enforced on the server for direct messages and feed; hiding blocked people's channel messages is done in your browser.
 - Anyone signed in can download any shared file. Set `ACCESS_CODE` when the server is public and do not share secrets in files.
 - Use HTTPS when online, otherwise passwords travel unencrypted.
@@ -111,7 +119,8 @@ All state is in `DATA_DIR` (default `./data`): `users.json` (accounts, profiles,
 Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (server uptime and connections from `/healthz`, HTTP and WebSocket latency, clock difference to the server, secure-context and encryption state), `scan`, `files`, `whoami`, `uptime`, `status`, `w`, `open`. The Monitor shows only live values from your session. In `?demo` mode nodes, replies and latency are simulated in the browser and both windows say so.
 
 ## Tests
-`npm test` runs the server integration tests (44, no browser). `npm run test:e2e` (16 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
+`npm test` runs the server integration tests (50, no browser). `npm run test:e2e` (20 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

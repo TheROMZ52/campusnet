@@ -74,9 +74,24 @@ const E2E = { probe: {}, priv: null, pub: null, fp: '', keys: {}, shared: {}, st
 const tofu = (() => { try { return JSON.parse(localStorage.getItem('cn:fp')) || {}; } catch { return {}; } })();
 const saveTofu = () => { try { localStorage.setItem('cn:fp', JSON.stringify(tofu)); } catch { /* ignore */ } };
 const canon = n => st.all.find(x => same(x, n)) || (same(n, st.me) ? st.me : '');
+function showUnlock(on) { const f = $('#unlockBar'); if (f) f.hidden = !on; }
+async function doUnlock(pw) {
+  try { E2E.priv = await CN.unlock(E2E.blob, pw); } catch { E2E.priv = null; toast('Wrong password', 'bad'); return false; }
+  st.loginPw = pw; E2E.locked = false; E2E.shared = {}; showUnlock(false); const old = st.ws; connect(); try { old.close(); } catch { /* ignore */ }
+  toast('Encrypted messages unlocked', 'ok', 2500); return true;
+}
+function endResume(msg) {
+  if (!st.resume) return; st.resume = false; st.token = ''; st.loginName = ''; document.body.classList.remove('resuming');
+  try { sessionStorage.removeItem('cn:token'); sessionStorage.removeItem('cn:name'); } catch { /* ignore */ }
+  if (msg) $('#loginErr').textContent = msg;
+}
 async function setupKeys(m) {
   E2E.keys = Object.assign({}, m.keys || {}); E2E.shared = {}; E2E.state = {}; E2E.probe = {};
   if (!CN.supported) { E2E.priv = null; return; }
+  if (st.resume && !st.loginPw && !E2E.priv) {   // page reload: the session continues, the key stays locked until the password is entered
+    E2E.priv = null; if (m.blob && m.pub) { E2E.pub = m.pub; E2E.blob = m.blob; E2E.locked = true; E2E.keys[m.me] = m.pub; try { E2E.fp = await CN.fingerprint(m.pub); } catch { /* ignore */ } showUnlock(true); }
+    return;
+  }
   try {
     const keep = E2E.priv && m.pub && E2E.pub && m.pub.x === E2E.pub.x && m.pub.y === E2E.pub.y;
     if (!keep) {
@@ -84,7 +99,7 @@ async function setupKeys(m) {
       if (m.blob && m.pub) { try { E2E.priv = await CN.unlock(m.blob, st.loginPw); E2E.pub = m.pub; } catch { E2E.priv = null; } }
       if (!E2E.priv) { const id = await CN.create(st.loginPw); E2E.priv = id.priv; E2E.pub = id.pub; send({ t: 'setkey', pub: id.pub, blob: id.blob }); if (m.blob) toast('Your encryption key was reset', 'warn', 6000); }
     }
-    E2E.keys[m.me] = E2E.pub; E2E.fp = await CN.fingerprint(E2E.pub);
+    E2E.keys[m.me] = E2E.pub; E2E.fp = await CN.fingerprint(E2E.pub); if (E2E.priv) { E2E.locked = false; showUnlock(false); }
   } catch { E2E.priv = null; toast('Encryption setup failed', 'bad'); }
 }
 function tofuCheck(name, fp) {
@@ -98,7 +113,7 @@ function trustKey(name) { if (E2E.pending[name]) { tofu[name] = { fp: E2E.pendin
 function markVerified(name, v) { if (tofu[name]) { tofu[name].v = !!v; saveTofu(); E2E.state[name] = v ? 'verified' : 'ok'; emitUI('state'); } }
 function forgetKeys() { Object.keys(tofu).forEach(k => delete tofu[k]); saveTofu(); E2E.shared = {}; E2E.state = {}; E2E.pending = {}; emitUI('state'); }
 async function sharedFor(name) {
-  if (!E2E.priv) throw new Error(CN.supported ? 'Your encryption key is not ready yet' : 'Encrypted messages need HTTPS or localhost');
+  if (!E2E.priv) throw new Error(E2E.locked ? 'Encrypted messages are locked. Enter your password in the bar above the chat.' : CN.supported ? 'Your encryption key is not ready yet' : 'Encrypted messages need HTTPS or localhost');
   if (E2E.shared[name] && E2E.state[name] !== 'changed') return E2E.shared[name];
   const pub = E2E.keys[name]; if (!pub) throw new Error(name + ' has no encryption key yet. They need to sign in once with this version.');
   tofuCheck(name, await CN.fingerprint(pub));
@@ -134,7 +149,7 @@ function connect() {
   ws.onerror = () => { if (!st.me) { gateLog('[-] link failed', 'bad'); setBusy(false); $('#loginErr').textContent = 'Cannot reach the server.'; } };
   ws.onclose = () => {
     if (st.ws !== ws) return;
-    if (!st.me) { setBusy(false); return; }
+    if (!st.me) { endResume('Could not resume your session. Please sign in again.'); setBusy(false); return; }
     st.retry++; const delay = Math.min(1000 * st.retry, 6000); let left = Math.ceil(delay / 1000);
     setLink('reconnecting', 'warn'); clearInterval(countdownTimer);
     const bar = $('#linkbar'); bar.hidden = false; bar.className = ''; void bar.offsetWidth; bar.classList.add('glitch');
@@ -166,7 +181,7 @@ async function handle(m) {
       await setupKeys(m); const dmsDec = {}; for (const [o, arr] of Object.entries(m.dms || {})) { dmsDec[o] = []; for (const x of arr) dmsDec[o].push(await decDM(x, m.me)); }
       const first = !st.me; if (first) st.t0 = Date.now();
       try { await fetch('/api/session', { method: 'POST', headers: { 'x-token': m.token } }); } catch { /* downloads need this cookie */ }
-      st.me = m.me; st.token = m.token; sessionStorage.setItem('cn:token', m.token); st.admin = m.admin; st.mode = 'login';
+      st.me = m.me; st.token = m.token; sessionStorage.setItem('cn:token', m.token); sessionStorage.setItem('cn:name', m.me); document.body.classList.remove('resuming'); st.admin = m.admin; st.mode = 'login';
       st.rooms = m.rooms; st.hist = m.hist; st.dms = dmsDec; st.notices = m.notices || []; st.files = m.files; st.maxMB = m.maxMB; setUsers(m.users, m.all);
       st.prefs = Object.assign({ following: [], blocked: [], muted: [], reads: {}, receipts: true }, m.prefs || {}); st.profiles = m.profiles || {}; st.myProfile = m.myProfile || { d: '', b: '', a: '' }; st.notifs = m.notifs || []; st.peerReads = m.peerReads || {}; st.reply = null; st.editing = null; st.groups = {}; (m.groups || []).forEach(addGroup); initUnread();
       clearTimeout(reconnectTimer); clearInterval(countdownTimer); $('#linkbar').hidden = true;
@@ -200,7 +215,8 @@ async function handle(m) {
     case 'admin': st.admin = true; $('#meBar').textContent = st.me + ' \u00B7 admin'; toast('Admin mode enabled'); renderFiles(); renderLog(); break;
     case 'err':
       if (m.fatal) {
-        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = m.text; st.me = ''; if (m.need === 'adminCode') { $('#admRow').hidden = false; $('#admIn').focus(); } try { st.ws.close(); } catch { /* ignore */ }
+        endResume('Your session ended. Please sign in again.'); const resumed = $('#loginErr').textContent;
+        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = resumed || m.text; st.me = ''; if (m.need === 'adminCode') { $('#admRow').hidden = false; $('#admIn').focus(); } try { st.ws.close(); } catch { /* ignore */ }
         if (!$('#app').hidden) { $('#app').hidden = true; $('#login').hidden = false; $('#linkbar').hidden = true; }
         const g = $('.gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
       } else { local(m.text, true); toast(m.text, 'bad'); }
@@ -309,7 +325,7 @@ $('#inp').addEventListener('keydown', e => { if (e.key === 'Escape' && (st.reply
 function initUnread() {
   st.unread = {}; const rd = st.prefs.reads;
   Object.entries(st.hist).forEach(([r, a]) => { const base = rd['r:' + r]; if (base == null || isMuted('r:' + r)) return; const n = a.filter(x => x.ts > base && x.from !== st.me && x.kind !== 'sys' && !isBlocked(x.from)).length; if (n) st.unread['r:' + r] = n; });
-  Object.entries(st.dms).forEach(([o, a]) => { if (isMuted('d:' + o)) return; const base = rd['d:' + o.toLowerCase()] || 0, n = a.filter(x => x.ts > base && x.from !== st.me && x.kind !== 'sys').length; if (n) st.unread['d:' + o] = n; });
+  Object.entries(st.dms).forEach(([o, a]) => { if (isMuted('d:' + o)) return; const base = rd['d:' + o.toLowerCase()] || 0, n = a.filter(x => x.ts > base && x.from !== st.me).length; if (n) st.unread['d:' + o] = n; });   // counts messages that could not be decrypted yet too
 }
 let readT = 0;
 function markRead() {
@@ -480,7 +496,7 @@ $('#loginForm').onsubmit = e => {
   if (st.mode === 'register' && pw !== $('#pw2In').value) return fail('Passwords do not match.');
   st.loginName = name; st.loginPw = pw; st.loginCode = $('#codeIn').value; st.loginAdm = $('#admIn').value; st.me = ''; st.token = ''; setBusy(true); connect();
 };
-$('#outBtn').onclick = async () => { if (await ask({ title: 'Sign out', text: 'You will leave the network. Your account stays.', ok: 'Sign out' })) { send({ t: 'bye' }); sessionStorage.removeItem('cn:token'); st.me = ''; st.token = ''; st.loginPw = ''; try { st.ws.close(); } catch { /* ignore */ } location.reload(); } };
+$('#outBtn').onclick = async () => { if (await ask({ title: 'Sign out', text: 'You will leave the network. Your account stays.', ok: 'Sign out' })) { send({ t: 'bye' }); sessionStorage.removeItem('cn:token'); sessionStorage.removeItem('cn:name'); sessionStorage.removeItem('cn:cur'); st.me = ''; st.token = ''; st.loginPw = ''; try { st.ws.close(); } catch { /* ignore */ } location.reload(); } };
 $('#statusSel').onchange = e => send({ t: 'status', status: e.target.value });
 
 /* ---------- tabs, clock ---------- */
@@ -493,3 +509,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { de
 setTimeout(() => { const h = document.querySelector('.gate .brand h1'); if (h) h.classList.add('glitch'); }, 350);
 
 if (!CN.supported) gateLog('[!] encrypted DMs need HTTPS or localhost', 'bad');
+
+$('#unlockBar').onsubmit = async e => { e.preventDefault(); const i = $('#unlockPw'); if (await doUnlock(i.value)) i.value = ''; else i.select(); };
+/* page reload: continue the session with the token kept in this tab, only the encryption key needs the password again */
+(function resumeSession() {
+  let t = '', n = '';
+  try { t = sessionStorage.getItem('cn:token') || ''; n = sessionStorage.getItem('cn:name') || ''; } catch { /* ignore */ }
+  if (!t || !n || IS_DEMO) return;
+  st.resume = true; st.token = t; st.me = ''; st.loginName = n; st.loginPw = ''; st.mode = 'login'; document.body.classList.add('resuming'); connect();
+})();

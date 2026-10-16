@@ -75,6 +75,7 @@
 
     <section id="center" class="panel">
       <div class="ph split"><span id="convTitle"></span><span id="e2e" class="e2e" hidden></span><button id="muteBtn" class="mute" type="button" hidden></button><input id="find" type="search" placeholder="find" aria-label="Find in chat"></div>
+      <form id="unlockBar" hidden><span>Encrypted messages are locked after a reload.</span><input type="password" id="unlockPw" autocomplete="current-password" aria-label="Password to unlock encrypted messages" placeholder="Your password" required><button class="btn sm" type="submit">Unlock</button></form>
       <div id="pinBar" hidden></div>
       <div id="log" role="log" aria-live="polite"></div>
       <div id="typing" aria-live="polite"></div>
@@ -144,7 +145,10 @@
 <script src="crypto.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
+<script src="music.js"></script>
 <script src="social.js"></script>
+<script src="home.js"></script>
 <script src="shell.js"></script>
+<script src="router.js"></script>
 </body>
 </html>

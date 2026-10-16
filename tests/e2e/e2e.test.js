@@ -106,14 +106,18 @@ describe('browser E2E', () => {
     await a.ctx.close();
   });
 
-  it('reload returns to the login gate (E2E key is password-locked); sign-out clears the token', async () => {
+  it('reload keeps the session; encrypted messages stay locked until the password is entered; sign-out ends the session', async () => {
     const a = await newUser(); await register(a.page, 'frank'); await online(a.page, 'frank', []);
-    await a.page.reload();
-    await a.page.waitForSelector('#loginForm', { state: 'visible' });
-    assert.equal(await a.page.evaluate(() => document.querySelector('#meBar').textContent), '');
-    await a.page.fill('#nameIn', 'frank'); await a.page.fill('#pwIn', PW); await a.page.click('#goBtn'); await online(a.page, 'frank', []);
+    await a.page.reload(); await online(a.page, 'frank', []);
+    assert.ok(await a.page.locator('#login').isHidden(), 'no login screen after a reload');
+    await a.page.waitForSelector('#unlockBar', { state: 'visible' });
+    await a.page.fill('#unlockPw', 'wrong-password-1'); await a.page.keyboard.press('Enter'); await sleep(600);
+    assert.ok(await a.page.locator('#unlockBar').isVisible(), 'wrong password keeps it locked');
+    await a.page.fill('#unlockPw', PW); await a.page.keyboard.press('Enter'); await a.page.waitForSelector('#unlockBar', { state: 'hidden' });
+    await online(a.page, 'frank', []);
     await a.page.click('#outBtn'); await a.page.click('#mOk');
-    await a.page.waitForFunction(() => !sessionStorage.getItem('cn:token'), null, { timeout: 5000 });
+    await a.page.waitForSelector('#loginForm', { state: 'visible' }); assert.equal(await a.page.evaluate(() => sessionStorage.getItem('cn:token')), null);
+    await a.page.reload(); await a.page.waitForSelector('#loginForm', { state: 'visible' });
     await a.ctx.close();
   });
 

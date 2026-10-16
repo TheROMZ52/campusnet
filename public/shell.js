@@ -7,12 +7,14 @@
   const os = () => document.body.classList.contains('os');
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const APPS = {
+    home: { title: 'Home', ic: 'home', cat: 'Core', w: 640, h: 560, build: b => Home.build(b) },
     chat: { title: 'Messages', ic: 'chat', cat: 'Core', sel: '#center', tab: 'chat' },
     board: { title: 'Board', ic: 'board', cat: 'Core', alias: 'chat' },
     terminal: { title: 'Terminal', ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
     nodes: { title: 'Network', ic: 'nodes', cat: 'Network', sel: '#pNodes', tab: 'rooms' },
     files: { title: 'Files', ic: 'files', cat: 'Network', sel: '#right', tab: 'files' },
     groups: { title: 'Groups', ic: 'chat', cat: 'Network', w: 480, h: 540, build: b => Social.groups(b) },
+    music: { title: 'Music', ic: 'music', cat: 'Core', w: 460, h: 560, build: b => Music.build(b) },
     people: { title: 'People', ic: 'nodes', cat: 'Network', w: 460, h: 520, build: b => Social.people(b) },
     feed: { title: 'Feed', ic: 'board', cat: 'Network', w: 460, h: 520, build: b => Social.feed(b) },
     alerts: { title: 'Alerts', ic: 'radar', cat: 'Network', w: 420, h: 420, build: b => Social.alerts(b) },
@@ -26,6 +28,7 @@
   function defaults() {
     const W = desk.clientWidth || 1200, H = desk.clientHeight || 700, L = 244, g = 16;
     const d = {
+      home: { x: L + 12, y: 16, w: clamp(Math.round(W * .52), 520, 720), h: clamp(H - 40, 420, 640) },
       chat: { x: L + 20, y: 28, w: clamp(Math.round(W * .5), 560, 780), h: clamp(H - 80, 380, 620) },
       nodes: { x: L + 70, y: 56, w: 560, h: clamp(H - 130, 340, 520) },
       files: { x: Math.max(L + 40, W - 420 - g), y: 40, w: 400, h: clamp(H - 100, 380, 580) }
@@ -107,6 +110,7 @@
     const d = defaults(); let saved = {}; try { saved = JSON.parse(localStorage.getItem(LS)) || {}; } catch { /* ignore */ }
     sized = desk.clientWidth > 0;
     Object.entries(wins).forEach(([id, w]) => { const s = saved[id], g = d[id]; Object.assign(w, g); if (s) { Object.assign(w, { x: s.x, y: s.y, w: s.w, h: s.h, max: !!s.max, min: !!s.min }); w.open = !!s.open; w.placed = true; } else { w.open = false; } fit(w); if (w.open && !w.built) ensure(id); });
+    if (os() && !Object.values(wins).some(w => w.open)) { wins.home.open = true; wins.home.placed = true; ensure('home'); }   // first start: begin on the Home page
   }
   function fit(w) { const W = desk.clientWidth, H = desk.clientHeight; w.w = clamp(w.w, 260, Math.max(260, W)); w.h = clamp(w.h, 160, Math.max(160, H)); w.x = clamp(w.x, 120 - w.w, Math.max(0, W - 120)); w.y = clamp(w.y, 0, Math.max(0, H - 36)); }
 
@@ -295,7 +299,7 @@
   $('#lockOut').onclick = () => { $('#lock').hidden = true; $('#app').inert = false; $('#outBtn').click(); };
   let booted = false;
   function boot() {
-    if (!os() || reduceMotion.matches || prefs.boot === false) return;
+    if (!os() || reduceMotion.matches || prefs.boot === false || st.resume) return;
     const b = $('#osboot'), log = $('#bootlog'), lines = ['CampusNet OS', '[*] initialising desktop...', '[+] link established', '[+] identity: ' + st.me + (st.admin ? ' (admin)' : ''), E2E.priv ? '[+] encryption: active' : '[!] encryption: unavailable', '[+] mounting library: ' + st.files.length + ' file(s)', '[+] nodes online: ' + st.users.length, '[*] starting desktop...'];
     b.hidden = false; b.classList.remove('out'); log.textContent = ''; let i = 0;
     const step = () => { if (i < lines.length) { log.textContent += lines[i++] + '\n'; setTimeout(step, 100); } else setTimeout(() => { b.classList.add('out'); setTimeout(() => { b.hidden = true; }, 450); }, 220); };
