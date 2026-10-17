@@ -27,6 +27,11 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Persian (v0.10)
+The whole interface is available in Persian (فارسی) and English. The language follows your browser the first time; change it with the button on the sign-in screen or in Settings > Language (the page reloads and your session continues). In Persian the content of windows and chat is right-to-left with the Vazirmatn font (served from `public/fonts/`, SIL Open Font License, see `Vazirmatn-OFL.txt`), messages use automatic text direction so mixed Persian/English lines read correctly, and dates use the Persian calendar. The window frame (title bars, launcher, taskbar) keeps its left-to-right layout. The terminal intentionally keeps English commands and output.
+
+Adding or changing text: wrap UI text in `tr('English text {name}', { name })` (or `trn(n, 'one', 'many')`) and add the Persian version to `FA` in `public/i18n.js`. English is the key and the fallback. `npm test` fails if a `tr()` text, a page text in `index.html` or a server message has no Persian entry, or if a translation loses a `{placeholder}`.
+
 ## Home, Music, reload and Back (v0.9)
 - **Home** is the first window on a fresh desktop: greeting, live counters, shortcuts to every app, the player, unread conversations, alerts, latest posts and the newest announcement. It is also what Back lands on.
 - **Music** is a separate app. Every audio file shared on the network (mp3, ogg, opus, wav, m4a, aac, flac) is in the library; upload from the Music window, play, seek, shuffle, repeat, volume. The player keeps playing when the window is closed and the track shows in the system media controls. Playback streams from the server with HTTP byte ranges. Pick a **profile song** (Music or People > Your profile): others see it on your profile in People search and can play it. A deleted file disappears from profiles.
@@ -120,7 +125,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (50, no browser). `npm run test:e2e` (20 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (55, no browser). `npm run test:e2e` (24 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

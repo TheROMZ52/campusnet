@@ -11,7 +11,7 @@ const emitUI = k => document.dispatchEvent(new CustomEvent('cn:' + k));
 const hhmm = ts => { const d = new Date(ts); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const color = n => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${80 + h % 130} 75% 68%)`; };
 const fmt = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
-const ago = ts => { const s = (Date.now() - ts) / 1000; return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago'; };
+const ago = ts => { const s = (Date.now() - ts) / 1000; return s < 60 ? tr('now') : s < 3600 ? tr('{n}m ago', { n: Math.floor(s / 60) }) : s < 86400 ? tr('{n}h ago', { n: Math.floor(s / 3600) }) : tr('{n}d ago', { n: Math.floor(s / 86400) }); };
 const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const prefs = Object.assign({ crt: true, mesh: true, sound: true, boot: true }, (() => { try { return JSON.parse(localStorage.getItem('cn:prefs')) || {}; } catch { return {}; } })());
@@ -41,7 +41,7 @@ function toast(text, kind = 'ok', ms = 3600) {
   while ($('#toasts').children.length > 4) $('#toasts').firstChild.remove();
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 260); }, ms);
 }
-function ask({ title, text, ok = 'Confirm', danger = false }) {
+function ask({ title, text, ok = tr('Confirm'), danger = false }) {
   return new Promise(res => {
     const m = $('#modal'), okb = $('#mOk'), cb = $('#mCancel'), prev = document.activeElement;
     $('#mTitle').textContent = title; $('#mText').textContent = text; okb.textContent = ok; okb.classList.toggle('danger', danger); m.hidden = false;
@@ -74,11 +74,13 @@ const E2E = { probe: {}, priv: null, pub: null, fp: '', keys: {}, shared: {}, st
 const tofu = (() => { try { return JSON.parse(localStorage.getItem('cn:fp')) || {}; } catch { return {}; } })();
 const saveTofu = () => { try { localStorage.setItem('cn:fp', JSON.stringify(tofu)); } catch { /* ignore */ } };
 const canon = n => st.all.find(x => same(x, n)) || (same(n, st.me) ? st.me : '');
+function dateLabel(d, opt) { return d.toLocaleDateString(I18N.lang === 'fa' ? 'fa-IR-u-ca-persian' : undefined, opt); }
+function langRow() { const l = el('label', 'tog'), s = el('select'); s.setAttribute('aria-label', tr('Language')); [['en', 'English'], ['fa', '\u0641\u0627\u0631\u0633\u06CC']].forEach(([c, n]) => s.append(new Option(n, c))); s.value = I18N.lang; s.onchange = () => I18N.setLang(s.value); l.append(el('span', null, tr('Language')), s); return l; }
 function showUnlock(on) { const f = $('#unlockBar'); if (f) f.hidden = !on; }
 async function doUnlock(pw) {
-  try { E2E.priv = await CN.unlock(E2E.blob, pw); } catch { E2E.priv = null; toast('Wrong password', 'bad'); return false; }
+  try { E2E.priv = await CN.unlock(E2E.blob, pw); } catch { E2E.priv = null; toast(tr('Wrong password'), 'bad'); return false; }
   st.loginPw = pw; E2E.locked = false; E2E.shared = {}; showUnlock(false); const old = st.ws; connect(); try { old.close(); } catch { /* ignore */ }
-  toast('Encrypted messages unlocked', 'ok', 2500); return true;
+  toast(tr('Encrypted messages unlocked'), 'ok', 2500); return true;
 }
 function endResume(msg) {
   if (!st.resume) return; st.resume = false; st.token = ''; st.loginName = ''; document.body.classList.remove('resuming');
@@ -97,45 +99,45 @@ async function setupKeys(m) {
     if (!keep) {
       E2E.priv = null;
       if (m.blob && m.pub) { try { E2E.priv = await CN.unlock(m.blob, st.loginPw); E2E.pub = m.pub; } catch { E2E.priv = null; } }
-      if (!E2E.priv) { const id = await CN.create(st.loginPw); E2E.priv = id.priv; E2E.pub = id.pub; send({ t: 'setkey', pub: id.pub, blob: id.blob }); if (m.blob) toast('Your encryption key was reset', 'warn', 6000); }
+      if (!E2E.priv) { const id = await CN.create(st.loginPw); E2E.priv = id.priv; E2E.pub = id.pub; send({ t: 'setkey', pub: id.pub, blob: id.blob }); if (m.blob) toast(tr('Your encryption key was reset'), 'warn', 6000); }
     }
     E2E.keys[m.me] = E2E.pub; E2E.fp = await CN.fingerprint(E2E.pub); if (E2E.priv) { E2E.locked = false; showUnlock(false); }
-  } catch { E2E.priv = null; toast('Encryption setup failed', 'bad'); }
+  } catch { E2E.priv = null; toast(tr('Encryption setup failed'), 'bad'); }
 }
 function tofuCheck(name, fp) {
   const t = tofu[name];
   if (!t) { tofu[name] = { fp, v: false }; saveTofu(); E2E.state[name] = 'new'; return; }
   if (t.fp === fp) { E2E.state[name] = t.v ? 'verified' : 'ok'; return; }
   E2E.state[name] = 'changed'; E2E.pending[name] = fp;
-  throw new Error('The safety number of ' + name + ' changed. Open Security, verify it, then trust the new key.');
+  throw new Error(tr('The safety number of {name} changed. Open Security, verify it, then trust the new key.', { name }));
 }
 function trustKey(name) { if (E2E.pending[name]) { tofu[name] = { fp: E2E.pending[name], v: false }; delete E2E.pending[name]; saveTofu(); } delete E2E.shared[name]; E2E.state[name] = 'ok'; emitUI('state'); }
 function markVerified(name, v) { if (tofu[name]) { tofu[name].v = !!v; saveTofu(); E2E.state[name] = v ? 'verified' : 'ok'; emitUI('state'); } }
 function forgetKeys() { Object.keys(tofu).forEach(k => delete tofu[k]); saveTofu(); E2E.shared = {}; E2E.state = {}; E2E.pending = {}; emitUI('state'); }
 async function sharedFor(name) {
-  if (!E2E.priv) throw new Error(E2E.locked ? 'Encrypted messages are locked. Enter your password in the bar above the chat.' : CN.supported ? 'Your encryption key is not ready yet' : 'Encrypted messages need HTTPS or localhost');
+  if (!E2E.priv) throw new Error(E2E.locked ? tr('Encrypted messages are locked. Enter your password in the bar above the chat.') : CN.supported ? tr('Your encryption key is not ready yet') : tr('Encrypted messages need HTTPS or localhost'));
   if (E2E.shared[name] && E2E.state[name] !== 'changed') return E2E.shared[name];
-  const pub = E2E.keys[name]; if (!pub) throw new Error(name + ' has no encryption key yet. They need to sign in once with this version.');
+  const pub = E2E.keys[name]; if (!pub) throw new Error(tr('{name} has no encryption key yet. They need to sign in once with this version.', { name }));
   tofuCheck(name, await CN.fingerprint(pub));
   return (E2E.shared[name] = await CN.shared(E2E.priv, pub));
 }
 async function decDM(m, me = st.me) {
-  if (!m.enc) return Object.assign({}, m, { text: '[unencrypted message blocked]', kind: 'sys' });
+  if (!m.enc) return Object.assign({}, m, { text: tr('[unencrypted message blocked]'), kind: 'sys' });
   const other = m.from === me ? m.to : m.from;
   try { const p = await CN.decrypt(await sharedFor(other), m.from, m.to, m.enc); return Object.assign({}, m, { text: String(p.text || ''), kind: p.kind === 'me' ? 'me' : 'chat', reply: cleanReply(p.reply), e2e: true }); }
-  catch { return Object.assign({}, m, { text: '[encrypted message: cannot decrypt]', kind: 'sys' }); }
+  catch { return Object.assign({}, m, { text: tr('[encrypted message: cannot decrypt]'), kind: 'sys' }); }
 }
 async function sendDM(to, text, kind, reply) {
-  const c = canon(to); if (!c) { toast('No user named "' + to + '"', 'bad'); return; }
+  const c = canon(to); if (!c) { toast(tr('No user named "{name}"', { name: to }), 'bad'); return; }
   try { const k = await sharedFor(c); send({ t: 'dm', to: c, enc: await CN.encrypt(k, st.me, c, { text, kind: kind === 'me' ? 'me' : 'chat', reply }) }); }
-  catch (e) { const t = e.message || 'Cannot send encrypted message'; local(t, true); toast(t, 'bad', 6000); }
+  catch (e) { const t = e.message || tr('Cannot send encrypted message'); local(t, true); toast(t, 'bad', 6000); }
 }
 function e2eBadge() {
   const b = $('#e2e'); if (!b) return;
   if (st.cur.k !== 'd') { b.hidden = true; return; }
   const n = st.cur.id, s = !CN.supported || !E2E.priv ? 'off' : E2E.state[n] === 'changed' ? 'bad' : !E2E.keys[n] ? 'nokey' : 'ok';
-  b.hidden = false; b.className = 'e2e ' + s; b.replaceChildren(icon('lock'), el('span', null, { off: 'unavailable', bad: 'key changed', nokey: 'no key yet', ok: E2E.state[n] === 'verified' ? 'e2e verified' : 'e2e' }[s]));
-  b.title = s === 'ok' ? 'End-to-end encrypted. Verify the safety number in Security.' : s === 'bad' ? 'The key of this contact changed. Open Security.' : s === 'off' ? 'Needs HTTPS or localhost' : 'This contact has no key yet';
+  b.hidden = false; b.className = 'e2e ' + s; b.replaceChildren(icon('lock'), el('span', null, { off: tr('unavailable'), bad: tr('key changed'), nokey: tr('no key yet'), ok: tr(E2E.state[n] === 'verified' ? 'e2e verified' : 'e2e') }[s]));
+  b.title = s === 'ok' ? tr('End-to-end encrypted. Verify the safety number in Security.') : s === 'bad' ? tr('The key of this contact changed. Open Security.') : s === 'off' ? tr('Needs HTTPS or localhost') : tr('This contact has no key yet');
   if (s === 'ok' && !E2E.state[n] && !E2E.probe[n]) { E2E.probe[n] = 1; sharedFor(n).then(e2eBadge, e2eBadge); }
 }
 
@@ -146,21 +148,21 @@ function connect() {
   st.ws = ws; if (!st.me) gateLog('[*] opening link...');
   ws.onopen = () => { if (!st.me) gateLog('[*] authenticating...'); ws.send(JSON.stringify({ t: 'join', mode: st.mode, name: st.me || st.loginName, password: st.loginPw, code: st.loginCode, token: st.token, adminCode: st.loginAdm })); };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => handle(m)).catch(err => console.error(err)); };
-  ws.onerror = () => { if (!st.me) { gateLog('[-] link failed', 'bad'); setBusy(false); $('#loginErr').textContent = 'Cannot reach the server.'; } };
+  ws.onerror = () => { if (!st.me) { gateLog('[-] link failed', 'bad'); setBusy(false); $('#loginErr').textContent = tr('Cannot reach the server.'); } };
   ws.onclose = () => {
     if (st.ws !== ws) return;
-    if (!st.me) { endResume('Could not resume your session. Please sign in again.'); setBusy(false); return; }
+    if (!st.me) { endResume(tr('Could not resume your session. Please sign in again.')); setBusy(false); return; }
     st.retry++; const delay = Math.min(1000 * st.retry, 6000); let left = Math.ceil(delay / 1000);
     setLink('reconnecting', 'warn'); clearInterval(countdownTimer);
     const bar = $('#linkbar'); bar.hidden = false; bar.className = ''; void bar.offsetWidth; bar.classList.add('glitch');
-    const paint = () => { bar.textContent = `LINK LOST \u2014 reconnecting in ${left}s (attempt ${st.retry})`; };
+    const paint = () => { bar.textContent = tr('LINK LOST \u2014 reconnecting in {left}s (attempt {n})', { left, n: st.retry }); };
     paint(); countdownTimer = setInterval(() => { left = Math.max(0, left - 1); paint(); }, 1000);
     clearTimeout(reconnectTimer); reconnectTimer = setTimeout(() => { clearInterval(countdownTimer); connect(); }, delay);
   };
 }
-function setLink(text, cls) { emitUI('state'); $('#stat').textContent = text; $('#led').className = 'led ' + cls; const b = $('#sbLink'); b.textContent = text; b.className = cls === 'ok' ? '' : cls; }
+function setLink(text, cls) { emitUI('state'); text = tr(text); $('#stat').textContent = text; $('#led').className = 'led ' + cls; const b = $('#sbLink'); b.textContent = text; b.className = cls === 'ok' ? '' : cls; }
 function gateLog(line, cls) { const g = $('#gateLog'); const lines = (g.dataset.l ? JSON.parse(g.dataset.l) : []).concat([[line, cls || '']]).slice(-3); g.dataset.l = JSON.stringify(lines); g.replaceChildren(...lines.map(([t, c]) => { const s = el('div', c, t); return s; })); }
-function send(o) { if (st.ws && st.ws.readyState === 1) st.ws.send(JSON.stringify(o)); else toast('Not connected. Message not sent.', 'bad'); }
+function send(o) { if (st.ws && st.ws.readyState === 1) st.ws.send(JSON.stringify(o)); else toast(tr('Not connected. Message not sent.'), 'bad'); }
 function setUsers(list, all) { st.users = list.map(u => u.n); st.status = {}; list.forEach(u => { st.status[u.n] = u.s; }); if (all) st.all = all; viz(); }
 const viz = () => { if (window.NetViz) NetViz.update({ me: st.me, users: st.users.map(n => ({ n, s: st.status[n] })) }); };
 if (window.NetViz) NetViz.onPick = n => open('d', n);
@@ -185,41 +187,41 @@ async function handle(m) {
       st.rooms = m.rooms; st.hist = m.hist; st.dms = dmsDec; st.notices = m.notices || []; st.files = m.files; st.maxMB = m.maxMB; setUsers(m.users, m.all);
       st.prefs = Object.assign({ following: [], blocked: [], muted: [], reads: {}, receipts: true }, m.prefs || {}); st.profiles = m.profiles || {}; st.myProfile = m.myProfile || { d: '', b: '', a: '' }; st.notifs = m.notifs || []; st.peerReads = m.peerReads || {}; st.reply = null; st.editing = null; st.groups = {}; (m.groups || []).forEach(addGroup); initUnread();
       clearTimeout(reconnectTimer); clearInterval(countdownTimer); $('#linkbar').hidden = true;
-      if (st.retry) toast('Link restored', 'ok', 2200); st.retry = 0;
+      if (st.retry) toast(tr('Link restored'), 'ok', 2200); st.retry = 0;
       gateLog('[+] access granted', 'ok'); setBusy(false); $('#login').hidden = true; $('#app').hidden = false;
       $('#siteBar').textContent = m.site; document.title = m.site; $('#meBar').textContent = m.me + (m.admin ? ' \u00B7 admin' : ''); $('#meAv').textContent = m.me[0];
-      $('#limit').textContent = 'Up to ' + m.maxMB + ' MB per file'; $('#sbMax').textContent = m.maxMB + ' MB';
+      $('#limit').textContent = tr('Up to {n} MB per file', { n: m.maxMB }); $('#sbMax').textContent = m.maxMB + ' MB';
       setLink('online', 'ok'); renderAll(); renderReplyBar(); markRead(); viz(); if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
-      if (first) local('Welcome, ' + m.me + '. Type /help for commands.');
+      if (first) local(tr('Welcome, {name}. Type /help for commands.', { name: m.me }));
       emitUI('welcome');
       break;
     }
     case 'users': setUsers(m.users, m.all); renderUsers(); break;
     case 'files': { const added = m.files.length > st.files.length; st.files = m.files; renderFiles(); if (added && document.body.dataset.tab !== 'files') bump('tbFiles'); break; }
-    case 'notices': { const more = m.notices.length > st.notices.length; st.notices = m.notices; if (st.cur.k === 'b') renderLog(); else if (more) { st.unread['b:board'] = (st.unread['b:board'] || 0) + 1; renderRooms(); tabBadges(); toast('New notice on the board', 'warn'); } break; }
+    case 'notices': { const more = m.notices.length > st.notices.length; st.notices = m.notices; if (st.cur.k === 'b') renderLog(); else if (more) { st.unread['b:board'] = (st.unread['b:board'] || 0) + 1; renderRooms(); tabBadges(); toast(tr('New notice on the board'), 'warn'); } break; }
     case 'msg': if (!st.hist[m.m.room] || st.hist[m.m.room].some(x => x.id === m.m.id) || (m.m.kind !== 'sys' && isBlocked(m.m.from))) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
     case 'delmsg': { const a = st.hist[m.room]; if (a) { const i = a.findIndex(x => x.id === m.id); if (i >= 0) a.splice(i, 1); } const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
     case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other) && !isMuted('d:' + other)) beep(); break; }
-    case 'key': { E2E.keys[m.name] = m.pub; delete E2E.shared[m.name]; delete E2E.state[m.name]; if (m.name !== st.me) CN.fingerprint(m.pub).then(fp => { const t = tofu[m.name]; if (t && t.fp !== fp) { E2E.state[m.name] = 'changed'; E2E.pending[m.name] = fp; toast('Safety number of ' + m.name + ' changed', 'warn', 7000); } emitUI('state'); e2eBadge(); }); break; }
+    case 'key': { E2E.keys[m.name] = m.pub; delete E2E.shared[m.name]; delete E2E.state[m.name]; if (m.name !== st.me) CN.fingerprint(m.pub).then(fp => { const t = tofu[m.name]; if (t && t.fp !== fp) { E2E.state[m.name] = 'changed'; E2E.pending[m.name] = fp; toast(tr('Safety number of {name} changed', { name: m.name }), 'warn', 7000); } emitUI('state'); e2eBadge(); }); break; }
     case 'pong': { const w = pingWait[m.id]; if (w) { delete pingWait[m.id]; w.res(Math.round(performance.now() - w.t0)); } break; }
     case 'group': { addGroup(m.g); renderRooms(); if (key(st.cur) === 'r:g:' + m.g.id) { renderLog(); renderPins(); } break; }
     case 'gleave': { delete st.groups[m.id]; delete st.hist['g:' + m.id]; if (key(st.cur) === 'r:g:' + m.id) open('r', st.rooms[0] || 'general'); else renderRooms(); break; }
     case 'upd': { const a = st.hist[m.room], i = a ? a.findIndex(x => x.id === m.m.id) : -1; if (i >= 0) a[i] = m.m; if (st.cur.k === 'r' && st.cur.id === m.room) { updateRow(m.m); renderPins(); } break; }
     case 'dmupd': { const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from, a = st.dms[other], i = a ? a.findIndex(x => x.id === dm.id) : -1; if (i >= 0) a[i] = dm; if (st.cur.k === 'd' && same(st.cur.id, other)) updateRow(dm); break; }
     case 'dmdel': { const other = same(m.a, st.me) ? m.b : m.a, a = st.dms[other], i = a ? a.findIndex(x => x.id === m.id) : -1; if (i >= 0) a.splice(i, 1); const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
-    case 'receipt': { st.peerReads[m.from] = m.ts; document.querySelectorAll('#log .rc').forEach(r => { if (same(r.dataset.peer, m.from) && +r.dataset.ts <= m.ts) { r.classList.add('seen'); r.textContent = ' \u2713\u2713'; r.title = 'Seen'; } }); break; }
+    case 'receipt': { st.peerReads[m.from] = m.ts; document.querySelectorAll('#log .rc').forEach(r => { if (same(r.dataset.peer, m.from) && +r.dataset.ts <= m.ts) { r.classList.add('seen'); r.textContent = ' \u2713\u2713'; r.title = tr('Seen'); } }); break; }
     case 'prefs': { const { t, ...rest } = m; Object.assign(st.prefs, rest); renderRooms(); renderUsers(); updMute(); tabBadges(); break; }
     case 'profile': { st.profiles[m.name] = m.p; if (m.name === st.me) st.myProfile = m.p; renderUsers(); break; }
     case 'notif': { st.notifs.unshift(m.n); if (!(m.n.conv && isMuted(m.n.conv))) toast(notifText(m.n), 'ok', 4200); break; }
     case 'typing': { const k = m.room ? 'r:' + m.room : 'd:' + m.from; (st.typing[k] = st.typing[k] || {})[m.from] = Date.now() + 4000; showTyping(); break; }
-    case 'admin': st.admin = true; $('#meBar').textContent = st.me + ' \u00B7 admin'; toast('Admin mode enabled'); renderFiles(); renderLog(); break;
+    case 'admin': st.admin = true; $('#meBar').textContent = st.me + ' \u00B7 admin'; toast(tr('Admin mode enabled')); renderFiles(); renderLog(); break;
     case 'err':
       if (m.fatal) {
-        endResume('Your session ended. Please sign in again.'); const resumed = $('#loginErr').textContent;
-        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = resumed || m.text; st.me = ''; if (m.need === 'adminCode') { $('#admRow').hidden = false; $('#admIn').focus(); } try { st.ws.close(); } catch { /* ignore */ }
+        endResume(tr('Your session ended. Please sign in again.')); const resumed = $('#loginErr').textContent;
+        gateLog('[-] access denied', 'bad'); setBusy(false); $('#loginErr').textContent = resumed || tr(m.text); st.me = ''; if (m.need === 'adminCode') { $('#admRow').hidden = false; $('#admIn').focus(); } try { st.ws.close(); } catch { /* ignore */ }
         if (!$('#app').hidden) { $('#app').hidden = true; $('#login').hidden = false; $('#linkbar').hidden = true; }
         const g = $('.gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
-      } else { local(m.text, true); toast(m.text, 'bad'); }
+      } else { local(tr(m.text), true); toast(tr(m.text), 'bad'); }
       break;
   }
   if (typeof Social !== 'undefined' && /^(prefs|profile|notif|results|feed|post|plike|pdel|group|gleave|gresults)$/.test(m.t)) Social.onMsg(m);
@@ -242,7 +244,7 @@ function clearTyping(k, name) { if (st.typing[k]) delete st.typing[k][name]; sho
 function showTyping() {
   const t = st.typing[key(st.cur)] || {}, now = Date.now(), names = Object.keys(t).filter(n => t[n] > now), box = $('#typing');
   box.replaceChildren(); if (!names.length) return;
-  const d = el('span', 'dots'); d.append(el('i'), el('i'), el('i')); box.append(d, names.join(', ') + (names.length > 1 ? ' are typing' : ' is typing'));
+  const d = el('span', 'dots'); d.append(el('i'), el('i'), el('i')); box.append(d, tr(names.length > 1 ? '{names} are typing' : '{names} is typing', { names: names.join(', ') }));
 }
 setInterval(showTyping, 1000);
 let lastTyp = 0;
@@ -259,13 +261,13 @@ function mkRow(m, cls) {
   r.append(el('span', 't', hhmm(m.ts || Date.now())));
   if (m.kind === 'sys') { const b = el('span', 'b', m.text); r.dataset.tag = /disconnected|signed out|left\b/i.test(m.text) ? '[-]' : /connected|shared|restored|welcome/i.test(m.text) ? '[+]' : cls === 'err' ? '[!]' : '[*]'; b.dataset.tag = r.dataset.tag; r.append(b); }
   else {
-    const { frag, mention } = rich(m.text); const body = el('span', 'b'); body.append(frag);
+    const { frag, mention } = rich(m.text); const body = el('span', 'b'); body.dir = 'auto'; body.append(frag);
     if (mention && m.from !== st.me) r.classList.add('mention');
     if (m.kind === 'me') { r.append(el('span', 'w', '*'), (() => { body.prepend(m.from + ' '); return body; })()); }
     else { const w = el('span', 'w', m.from); w.style.color = color(m.from); r.append(w, body); }
     if (m.reply) { const q = el('div', 'rq'); q.append(el('b', null, m.reply.from), ' ' + m.reply.text); q.onclick = () => jumpTo(m.reply.id); body.prepend(q); }
-    if (m.edited) body.append(el('small', 'ed', ' (edited)'));
-    if (m.to && m.from === st.me) { const seen = (st.peerReads[m.to] || 0) >= m.ts, rc = el('small', 'rc' + (seen ? ' seen' : ''), seen ? ' \u2713\u2713' : ' \u2713'); rc.dataset.peer = m.to; rc.dataset.ts = m.ts; rc.title = seen ? 'Seen' : 'Sent'; body.append(rc); }
+    if (m.edited) body.append(el('small', 'ed', ' ' + tr('(edited)')));
+    if (m.to && m.from === st.me) { const seen = (st.peerReads[m.to] || 0) >= m.ts, rc = el('small', 'rc' + (seen ? ' seen' : ''), seen ? ' \u2713\u2713' : ' \u2713'); rc.dataset.peer = m.to; rc.dataset.ts = m.ts; rc.title = seen ? tr('Seen') : tr('Sent'); body.append(rc); }
     if (m.reactions) { const rx = el('div', 'rx'); Object.entries(m.reactions).forEach(([e, who]) => { const c = el('button', 'rxc' + (who.includes(st.me) ? ' me' : ''), e + ' ' + who.length); c.type = 'button'; c.title = who.join(', '); c.onclick = () => send(Object.assign({ t: 'react', id: m.id, emoji: e }, convRef(m))); rx.append(c); }); body.append(rx); }
     if (m.id) r.append(rowActions(m));
   }
@@ -282,13 +284,13 @@ const myRole = room => ((((st.groups[room.slice(2)] || {}).members) || []).find(
 const canMod = room => room.startsWith('g:') ? ['owner', 'mod'].includes(myRole(room)) : !!st.admin;
 const isBlocked = n => st.prefs.blocked.includes(String(n).toLowerCase());
 const isMuted = k => st.prefs.muted.includes(String(k).toLowerCase());
-function notifText(n) { const t = { follow: 'started following you', like: 'liked your post', react: 'reacted ' + n.text, reply: 'replied: ' + n.text, mention: 'mentioned you: ' + n.text, invite: n.text }[n.type]; return n.from + ' ' + (t || n.text || ''); }
+function notifText(n) { const t = { follow: tr('started following you'), like: tr('liked your post'), react: tr('reacted {text}', { text: n.text }), reply: tr('replied: {text}', { text: n.text }), mention: tr('mentioned you: {text}', { text: n.text }), invite: (/^added you to (.+)$/.exec(n.text || '') ? tr('added you to {name}', { name: /^added you to (.+)$/.exec(n.text)[1] }) : n.text) }[n.type]; return n.from + ' ' + (t || n.text || ''); }
 function rowActions(m) {
   const box = el('span', 'ra'), add = (txt, label, fn) => { const b = el('button', 'ra-b', txt); b.type = 'button'; b.setAttribute('aria-label', label); b.title = label; b.onclick = e => { e.stopPropagation(); fn(b); }; box.append(b); };
-  add('\u21A9', 'Reply', () => startReply(m)); add('\u263A', 'React', b => reactPicker(m, b));
-  if (m.from === st.me) add('\u270E', 'Edit message', () => startEdit(m));
-  if (m.room && canMod(m.room)) add(m.pinned ? '\u25C6' : '\u25C7', m.pinned ? 'Unpin message' : 'Pin message', () => send({ t: 'pin', room: m.room, id: m.id, on: !m.pinned }));
-  if (m.from === st.me || (m.room && canMod(m.room))) add('\u00D7', 'Delete message', () => send(m.room ? { t: 'delmsg', room: m.room, id: m.id } : { t: 'deldm', to: m.to === st.me ? m.from : m.to, id: m.id }));
+  add('\u21A9', tr('Reply'), () => startReply(m)); add('\u263A', tr('React'), b => reactPicker(m, b));
+  if (m.from === st.me) add('\u270E', tr('Edit message'), () => startEdit(m));
+  if (m.room && canMod(m.room)) add(m.pinned ? '\u25C6' : '\u25C7', m.pinned ? tr('Unpin message') : tr('Pin message'), () => send({ t: 'pin', room: m.room, id: m.id, on: !m.pinned }));
+  if (m.from === st.me || (m.room && canMod(m.room))) add('\u00D7', tr('Delete message'), () => send(m.room ? { t: 'delmsg', room: m.room, id: m.id } : { t: 'deldm', to: m.to === st.me ? m.from : m.to, id: m.id }));
   return box;
 }
 function reactPicker(m, anchor) {
@@ -297,28 +299,28 @@ function reactPicker(m, anchor) {
   anchor.closest('.msg').append(p);
 }
 document.addEventListener('click', e => { if (!e.target.closest('.rpick')) document.querySelectorAll('.rpick').forEach(x => x.remove()); });
-function jumpTo(id) { const r = document.querySelector(`#log .msg[data-id="${CSS.escape(id)}"]`); if (!r) { toast('That message is not loaded', 'warn'); return; } r.scrollIntoView({ block: 'center' }); r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash'); }
+function jumpTo(id) { const r = document.querySelector(`#log .msg[data-id="${CSS.escape(id)}"]`); if (!r) { toast(tr('That message is not loaded'), 'warn'); return; } r.scrollIntoView({ block: 'center' }); r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash'); }
 function startReply(m) { st.editing = null; st.reply = { id: m.id, from: m.from, text: snip(m.text) }; renderReplyBar(); $('#inp').focus(); }
 function startEdit(m) { st.reply = null; st.editing = { m }; $('#inp').value = m.text; renderReplyBar(); $('#inp').focus(); }
 function renderReplyBar() {
   const bar = $('#replyBar'); if (!bar) return; bar.replaceChildren();
   bar.hidden = !st.reply && !st.editing; if (bar.hidden) return;
-  bar.append(el('span', 'rl', st.editing ? 'Editing message' : 'Replying to ' + st.reply.from + ': ' + st.reply.text));
-  const x = el('button', 'ra-b', '\u00D7'); x.type = 'button'; x.setAttribute('aria-label', 'Cancel'); x.onclick = cancelCompose; bar.append(x);
+  bar.append(el('span', 'rl', st.editing ? tr('Editing message') : tr('Replying to {name}: {text}', { name: st.reply.from, text: st.reply.text })));
+  const x = el('button', 'ra-b', '\u00D7'); x.type = 'button'; x.setAttribute('aria-label', tr('Cancel')); x.onclick = cancelCompose; bar.append(x);
 }
 function cancelCompose() { if (st.editing) $('#inp').value = ''; st.reply = null; st.editing = null; renderReplyBar(); }
 async function finishEdit(text) {
   const m = st.editing.m; st.editing = null; renderReplyBar(); if (!text || text === m.text) return;
   if (m.room) return send({ t: 'edit', room: m.room, id: m.id, text });
   const other = m.to === st.me ? m.from : m.to;
-  try { const k = await sharedFor(other); send({ t: 'edit', to: other, id: m.id, enc: await CN.encrypt(k, st.me, other, { text, kind: m.kind === 'me' ? 'me' : 'chat', reply: m.reply }) }); } catch (e) { toast(e.message || 'Edit failed', 'bad'); }
+  try { const k = await sharedFor(other); send({ t: 'edit', to: other, id: m.id, enc: await CN.encrypt(k, st.me, other, { text, kind: m.kind === 'me' ? 'me' : 'chat', reply: m.reply }) }); } catch (e) { toast(e.message || tr('Edit failed'), 'bad'); }
 }
 function renderPins() {
   const bar = $('#pinBar'); if (!bar) return; const pins = st.cur.k === 'r' ? (st.hist[st.cur.id] || []).filter(x => x.pinned) : [];
   bar.hidden = !pins.length; bar.replaceChildren();
   pins.forEach(p => { const b = el('button', 'pin'); b.type = 'button'; b.append(el('span', 'pg', '\u25C6'), el('b', null, p.from), ' ' + snip(p.text)); b.onclick = () => jumpTo(p.id); bar.append(b); });
 }
-function updMute() { const b = $('#muteBtn'); if (!b) return; b.hidden = st.cur.k === 'b'; if (b.hidden) return; const m = isMuted(key(st.cur)); b.textContent = m ? '[muted]' : '[mute]'; b.classList.toggle('on', m); b.title = m ? 'Unmute this conversation' : 'Mute notifications for this conversation'; }
+function updMute() { const b = $('#muteBtn'); if (!b) return; b.hidden = st.cur.k === 'b'; if (b.hidden) return; const m = isMuted(key(st.cur)); b.textContent = '[' + tr(m ? 'muted' : 'mute') + ']'; b.classList.toggle('on', m); b.title = m ? tr('Unmute this conversation') : tr('Mute notifications for this conversation'); }
 $('#muteBtn').onclick = () => { const k = key(st.cur).toLowerCase(), on = !isMuted(k); if (on) delete st.unread[key(st.cur)]; send({ t: 'mute', k, on }); };
 $('#inp').addEventListener('keydown', e => { if (e.key === 'Escape' && (st.reply || st.editing)) cancelCompose(); });
 /* persistent unread: counted from the server-stored "read up to" timestamp of each conversation */
@@ -341,20 +343,20 @@ function local(text, bad) { addRow({ kind: 'sys', text, ts: Date.now() }, bad ? 
 function renderLog() {
   const log = $('#log'); log.replaceChildren();
   const board = st.cur.k === 'b'; e2eBadge();
-  $('#form').hidden = board && !st.admin; $('#inp').placeholder = board ? 'Broadcast a notice to everyone' : 'Message, or /help';
+  $('#form').hidden = board && !st.admin; $('#inp').placeholder = board ? tr('Broadcast a notice to everyone') : tr('Message, or /help');
   if (board) {
-    $('#convTitle').textContent = 'Broadcast board' + (st.admin ? '' : ' \u00B7 read only');
-    if (!st.notices.length) log.append(emptyState('board', 'Nothing broadcast yet', st.admin ? 'Post the first notice below.' : 'Admins can pin announcements here.'));
+    $('#convTitle').textContent = tr('Broadcast board') + (st.admin ? '' : ' \u00B7 ' + tr('read only'));
+    if (!st.notices.length) log.append(emptyState('board', tr('Nothing broadcast yet'), st.admin ? tr('Post the first notice below.') : tr('Admins can pin announcements here.')));
     st.notices.forEach(n => {
       const c = el('div', 'card'), by = el('div', 'by'), p = el('p'); by.append(el('b', null, n.by), el('span', null, new Date(n.ts).toLocaleString())); p.append(rich(n.text).frag);
-      if (st.admin) { const d = el('button', 'icon-btn bad rm'); d.append(icon('trash')); d.setAttribute('aria-label', 'Remove notice'); d.onclick = () => send({ t: 'delnotice', id: n.id }); by.append(d); }
+      if (st.admin) { const d = el('button', 'icon-btn bad rm'); d.append(icon('trash')); d.setAttribute('aria-label', tr('Remove notice')); d.onclick = () => send({ t: 'delnotice', id: n.id }); by.append(d); }
       c.append(by, p); log.append(c);
     });
     return;
   }
   const list = st.cur.k === 'r' ? (st.hist[st.cur.id] || []) : (st.dms[st.cur.id] || []);
   $('#convTitle').textContent = st.cur.k === 'r' ? (st.cur.id.startsWith('g:') ? '\u25C7 ' + ((st.groups[st.cur.id.slice(2)] || {}).name || 'group') + ' \u00B7 group \u00B7 not end-to-end encrypted' : '# ' + st.cur.id) : 'private \u00B7 ' + st.cur.id;
-  if (!list.length) log.append(emptyState('radar', 'Quiet on this channel', st.cur.k === 'r' ? 'No transmissions yet. Say something.' : 'End-to-end encrypted: only you and ' + st.cur.id + ' can read this.'));
+  if (!list.length) log.append(emptyState('radar', tr('Quiet on this channel'), st.cur.k === 'r' ? tr('No transmissions yet. Say something.') : tr('End-to-end encrypted: only you and {name} can read this.', { name: st.cur.id })));
   list.filter(m => m.kind === 'sys' || !isBlocked(m.from)).forEach(m => addRow(m)); scrollEnd(); showTyping();
 }
 function applyFind(row) { const q = $('#find').value.trim().toLowerCase(); (row ? [row] : document.querySelectorAll('#log .msg')).forEach(r => { r.hidden = !!q && !r.textContent.toLowerCase().includes(q); }); }
@@ -365,16 +367,16 @@ function item(on, glyph, name, badge, fn, extra) {
 }
 function renderRooms() {
   const ul = $('#rooms'); ul.replaceChildren();
-  ul.append(item(st.cur.k === 'b', el('span', 'g', '\u25C8'), 'Broadcast board', st.unread['b:board'], () => open('b', 'board')));
+  ul.append(item(st.cur.k === 'b', el('span', 'g', '\u25C8'), tr('Broadcast board'), st.unread['b:board'], () => open('b', 'board')));
   st.rooms.forEach(r => ul.append(item(key(st.cur) === 'r:' + r, el('span', 'g', '#'), r, st.unread['r:' + r], () => open('r', r))));
   Object.values(st.groups).forEach(g => ul.append(item(key(st.cur) === 'r:g:' + g.id, el('span', 'g', '\u25C7'), g.name, st.unread['r:g:' + g.id], () => open('r', 'g:' + g.id))));
 }
 function renderUsers() {
-  const ul = $('#users'); ul.replaceChildren(); $('#ucount').textContent = st.users.length + ' online'; $('#sbNodes').textContent = st.users.length;
+  const ul = $('#users'); ul.replaceChildren(); $('#ucount').textContent = tr('{n} online', { n: st.users.length }); $('#sbNodes').textContent = st.users.length;
   const names = new Set([...st.users, ...st.all, ...Object.keys(st.dms)]);
   [...names].filter(n => !isBlocked(n)).sort((a, b) => (st.users.includes(b) - st.users.includes(a)) || a.localeCompare(b)).forEach(n => {
     const live = st.users.includes(n), s = live ? (st.status[n] || 'online') : 'off', led = el('span', 'led ' + (s === 'online' ? 'ok' : s === 'away' ? 'warn' : s === 'busy' ? 'bad' : ''));
-    const li = item(key(st.cur) === 'd:' + n, led, n + (n === st.me ? ' (you)' : ''), st.unread['d:' + n], n === st.me ? null : () => open('d', n), live && s !== 'online' ? el('small', null, s) : null);
+    const li = item(key(st.cur) === 'd:' + n, led, n + (n === st.me ? ' ' + tr('(you)') : ''), st.unread['d:' + n], n === st.me ? null : () => open('d', n), live && s !== 'online' ? el('small', null, tr(s)) : null);
     if (!live) li.classList.add('off'); if (n === st.me) li.classList.add('self');
     const pr = st.profiles[n]; if (pr && pr.d) { li.querySelector('.n').append(el('small', 'dn', ' ' + pr.d)); li.title = pr.b || pr.d; }
     ul.append(li);
@@ -385,15 +387,15 @@ function renderFiles() {
   const ul = $('#files'); ul.replaceChildren(); const q = $('#ffind').value.trim().toLowerCase();
   const list = st.files.filter(f => !q || f.name.toLowerCase().includes(q));
   $('#sbFiles').textContent = st.files.length; $('#fcount').textContent = st.files.length ? st.files.length + ' file' + (st.files.length > 1 ? 's' : '') : '';
-  if (!list.length) { const li = el('li'); li.style.cssText = 'cursor:default;border:0;background:none;justify-content:center'; li.append(emptyState('files', st.files.length ? 'No match' : 'Library is empty', st.files.length ? 'Try a different filter.' : 'Files shared by anyone on the network show up here.')); ul.append(li); return; }
+  if (!list.length) { const li = el('li'); li.style.cssText = 'cursor:default;border:0;background:none;justify-content:center'; li.append(emptyState('files', st.files.length ? tr('No match') : tr('Library is empty'), st.files.length ? tr('Try a different filter.') : tr('Files shared by anyone on the network show up here.'))); ul.append(li); return; }
   list.forEach(f => {
     const li = el('li'), url = `/f/${f.id}`;
     li.append(el('span', 'ext', extOf(f.name)));
     const info = el('div', 'info'); info.append(el('div', 'fn', f.name), el('div', 'meta', `${fmt(f.size)} \u00B7 ${f.owner} \u00B7 ${ago(f.ts)}`)); li.append(info);
-    const acts = el('div', 'acts'), a = el('a', 'icon-btn'); a.href = url; a.rel = 'noopener'; a.setAttribute('aria-label', 'Download ' + f.name); a.title = 'Download'; a.append(icon('dl')); acts.append(a);
-    if (f.owner === st.me || st.admin) { const d = el('button', 'icon-btn bad'); d.append(icon('trash')); d.setAttribute('aria-label', 'Delete ' + f.name); d.title = 'Delete'; d.onclick = async () => { if (await ask({ title: 'Delete file', text: `"${f.name}" will be removed for everyone.`, ok: 'Delete', danger: true })) send({ t: 'delfile', id: f.id }); }; acts.append(d); }
+    const acts = el('div', 'acts'), a = el('a', 'icon-btn'); a.href = url; a.rel = 'noopener'; a.setAttribute('aria-label', tr('Download {name}', { name: f.name })); a.title = tr('Download'); a.append(icon('dl')); acts.append(a);
+    if (f.owner === st.me || st.admin) { const d = el('button', 'icon-btn bad'); d.append(icon('trash')); d.setAttribute('aria-label', tr('Delete {name}', { name: f.name })); d.title = tr('Delete'); d.onclick = async () => { if (await ask({ title: tr('Delete file'), text: tr('"{name}" will be removed for everyone.', { name: f.name }), ok: tr('Delete'), danger: true })) send({ t: 'delfile', id: f.id }); }; acts.append(d); }
     li.append(acts);
-    if (f.img) { const w = el('a', 'th'), i = el('img'); i.loading = 'lazy'; i.alt = 'Preview of ' + f.name; i.src = url + '?inline=1'; w.href = url + '?inline=1'; w.target = '_blank'; w.rel = 'noopener'; w.append(i); li.append(w); }
+    if (f.img) { const w = el('a', 'th'), i = el('img'); i.loading = 'lazy'; i.alt = tr('Preview of {name}', { name: f.name }); i.src = url + '?inline=1'; w.href = url + '?inline=1'; w.target = '_blank'; w.rel = 'noopener'; w.append(i); li.append(w); }
     ul.append(li);
   });
 }
@@ -416,7 +418,7 @@ function say(text, kind) {
 function command(line) {
   const [cmd, ...rest] = line.slice(1).split(' '), arg = rest.join(' ').trim();
   switch (cmd.toLowerCase()) {
-    case 'help': ['/help             this list', '/me <action>      action message', '/w <user> <msg>   private message', '/users            who is online', '/admin <code>     admin mode (if enabled)', '/clear            clear this screen (local)', 'Tip: @name mentions someone. Hover a message to delete your own. Press / to focus the input.'].forEach(l => local(l)); break;
+    case 'help': ['/help             this list', '/me <action>      action message', '/w <user> <msg>   private message', '/users            who is online', '/admin <code>     admin mode (if enabled)', '/clear            clear this screen (local)', tr('Tip: @name mentions someone. Hover a message to delete your own. Press / to focus the input.')].forEach(l => local(l)); break;
     case 'me': if (arg) say(arg, 'me'); break;
     case 'w': { const [to, ...m] = arg.split(' '); if (!to || !m.length) return local('Usage: /w <user> <message>', true); { const c = canon(to) || to; open('d', c); sendDM(c, m.join(' ')); } break; }
     case 'users': local('Online: ' + st.users.join(', ')); break;
@@ -431,10 +433,10 @@ document.addEventListener('keydown', e => { if (e.key === '/' && !$('#app').hidd
 const queue = []; let active = null;
 function enqueue(list) {
   [...list].forEach(f => {
-    if (f.size > st.maxMB * 1048576) return toast(`"${f.name}" is larger than ${st.maxMB} MB`, 'bad', 5000);
-    if (!f.size) return toast(`"${f.name}" is empty`, 'bad');
+    if (f.size > st.maxMB * 1048576) return toast(tr('"{name}" is larger than {n} MB', { name: f.name, n: st.maxMB }), 'bad', 5000);
+    if (!f.size) return toast(tr('"{name}" is empty', { name: f.name }), 'bad');
     const card = el('div', 'xfer queued'), nm = el('span', 'nm', f.name), s = el('span', 'st', 'queued'), x = el('button', 'icon-btn'), bar = el('div', 'bar'), fill = el('i'), meta = el('div', 'meta', fmt(f.size));
-    x.append(icon('x')); x.setAttribute('aria-label', 'Cancel upload of ' + f.name); x.style.cssText = 'width:30px;height:30px;min-height:0';
+    x.append(icon('x')); x.setAttribute('aria-label', tr('Cancel upload of {name}', { name: f.name })); x.style.cssText = 'width:30px;height:30px;min-height:0';
     const top = el('div', 'top'); top.append(nm, s, x); bar.append(fill); card.append(top, bar, meta); $('#prog').append(card);
     const t = { f, card, s, fill, meta, x, xhr: null, dead: false };
     x.onclick = () => { t.dead = true; if (t.xhr) t.xhr.abort(); else { card.remove(); const i = queue.indexOf(t); if (i >= 0) queue.splice(i, 1); } };
@@ -453,15 +455,15 @@ function pump() {
     if (now - lastT > 250) { speed = speed ? speed * .6 + ((e.loaded - lastL) / ((now - lastT) / 1000)) * .4 : (e.loaded - lastL) / ((now - lastT) / 1000); lastT = now; lastL = e.loaded; }
     t.fill.style.width = (e.loaded / e.total * 100) + '%';
     const left = speed > 0 ? Math.ceil((e.total - e.loaded) / speed) : 0;
-    t.meta.textContent = `${Math.round(e.loaded / e.total * 100)}% \u00B7 ${fmt(e.loaded)} / ${fmt(e.total)}` + (speed ? ` \u00B7 ${fmt(Math.round(speed))}/s \u00B7 ${left}s left` : '');
+    t.meta.textContent = `${Math.round(e.loaded / e.total * 100)}% \u00B7 ${fmt(e.loaded)} / ${fmt(e.total)}` + (speed ? ' \u00B7 ' + tr('{speed}/s \u00B7 {left}s left', { speed: fmt(Math.round(speed)), left }) : '');
   };
   const finish = (state, msg) => {
-    t.xhr = null; t.card.className = 'xfer ' + (state === 'done' ? 'done' : 'fail'); t.s.textContent = state === 'done' ? 'complete' : state; t.meta.textContent = msg; t.x.replaceChildren(icon('x')); t.x.setAttribute('aria-label', 'Dismiss'); t.x.onclick = () => t.card.remove();
-    if (state === 'done') { t.fill.style.width = '100%'; toast(`Uploaded "${f.name}" (${fmt(f.size)})`); setTimeout(() => t.card.remove(), 2500); } else if (state !== 'cancelled') toast(`"${f.name}": ${msg}`, 'bad', 6000); else setTimeout(() => t.card.remove(), 1200);
+    t.xhr = null; t.card.className = 'xfer ' + (state === 'done' ? 'done' : 'fail'); t.s.textContent = state === 'done' ? 'complete' : state; t.meta.textContent = msg; t.x.replaceChildren(icon('x')); t.x.setAttribute('aria-label', tr('Dismiss')); t.x.onclick = () => t.card.remove();
+    if (state === 'done') { t.fill.style.width = '100%'; toast(tr('Uploaded "{name}" ({size})', { name: f.name, size: fmt(f.size) })); setTimeout(() => t.card.remove(), 2500); } else if (state !== 'cancelled') toast(`"${f.name}": ${msg}`, 'bad', 6000); else setTimeout(() => t.card.remove(), 1200);
     active = null; pump();
   };
-  x.onload = () => { if (x.status === 200) finish('done', fmt(f.size) + ' shared with everyone'); else { let msg = 'upload failed (' + x.status + ')'; try { msg = JSON.parse(x.responseText).error || msg; } catch { /* ignore */ } finish('failed', msg); } };
-  x.onerror = () => finish('failed', 'connection lost during transfer'); x.onabort = () => finish('cancelled', 'cancelled');
+  x.onload = () => { if (x.status === 200) finish('done', fmt(f.size) + tr(' shared with everyone')); else { let msg = 'upload failed (' + x.status + ')'; try { msg = JSON.parse(x.responseText).error || msg; } catch { /* ignore */ } finish('failed', msg); } };
+  x.onerror = () => finish('failed', tr('connection lost during transfer')); x.onabort = () => finish('cancelled', 'cancelled');
   x.send(f);
 }
 $('#pick').onclick = () => $('#fileIn').click(); $('#attach').onclick = () => $('#fileIn').click();
@@ -479,24 +481,24 @@ function setMode(m) {
   st.mode = m; const up = m === 'register';
   $('#tabIn').setAttribute('aria-selected', String(!up)); $('#tabUp').setAttribute('aria-selected', String(up));
   $('#pw2Row').hidden = !up; $('#meter').hidden = !up; $('#loginErr').textContent = '';
-  $('#goBtn .lbl').textContent = up ? 'Create account' : 'Connect';
+  $('#goBtn .lbl').textContent = up ? tr('Create account') : tr('Connect');
   $('#pwIn').autocomplete = up ? 'new-password' : 'current-password';
-  $('#gateHint').textContent = up ? 'Pick a username and a password (8+ characters). Passwords are hashed on the server; there is no reset, so remember it.' : 'New here? Open the Register tab, pick a username and a password. That name becomes yours.';
+  $('#gateHint').textContent = up ? tr('Pick a username and a password (8+ characters). Passwords are hashed on the server; there is no reset, so remember it.') : tr('New here? Open the Register tab, pick a username and a password. That name becomes yours.');
 }
 $('#tabIn').onclick = () => setMode('login'); $('#tabUp').onclick = () => setMode('register');
-$('#pwShow').onclick = e => { const p = $('#pwIn'), show = p.type === 'password'; p.type = show ? 'text' : 'password'; e.target.textContent = show ? 'hide' : 'show'; e.target.setAttribute('aria-pressed', String(show)); };
+$('#pwShow').onclick = e => { const p = $('#pwIn'), show = p.type === 'password'; p.type = show ? 'text' : 'password'; e.target.textContent = show ? tr('hide') : tr('show'); e.target.setAttribute('aria-pressed', String(show)); };
 $('#pwIn').addEventListener('input', () => { const v = $('#pwIn').value; $('#meter').dataset.s = v.length < 8 ? 0 : 1 + (v.length >= 12) + (/[a-z]/.test(v) && /[A-Z]/.test(v) && /\d/.test(v)) + (/[^\w\s]/.test(v) && v.length >= 12); });
-fetch('/api/info').then(r => r.json()).then(i => { $('#siteName').textContent = i.name; $('#codeRow').hidden = !i.needCode; document.title = i.name; }).catch(() => { $('#loginErr').textContent = 'Server unreachable.'; });
+fetch('/api/info').then(r => r.json()).then(i => { $('#siteName').textContent = i.name; $('#codeRow').hidden = !i.needCode; document.title = i.name; }).catch(() => { $('#loginErr').textContent = tr('Server unreachable.'); });
 $('#loginForm').onsubmit = e => {
   e.preventDefault(); const err = $('#loginErr'); err.textContent = '';
   const name = $('#nameIn').value.trim(), pw = $('#pwIn').value;
   const fail = t => { err.textContent = t; const g = $('.gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake'); };
-  if (!/^[\p{L}\p{N}_.-]{2,20}$/u.test(name)) return fail('Username: 2-20 letters, digits, _ . or -');
-  if (pw.length < (st.mode === 'register' ? 8 : 4)) return fail(st.mode === 'register' ? 'Choose a password of at least 8 characters.' : 'Enter your password.');
-  if (st.mode === 'register' && pw !== $('#pw2In').value) return fail('Passwords do not match.');
+  if (!/^[\p{L}\p{N}_.-]{2,20}$/u.test(name)) return fail(tr('Username: 2-20 letters, digits, _ . or -'));
+  if (pw.length < (st.mode === 'register' ? 8 : 4)) return fail(st.mode === 'register' ? tr('Choose a password of at least 8 characters.') : tr('Enter your password.'));
+  if (st.mode === 'register' && pw !== $('#pw2In').value) return fail(tr('Passwords do not match.'));
   st.loginName = name; st.loginPw = pw; st.loginCode = $('#codeIn').value; st.loginAdm = $('#admIn').value; st.me = ''; st.token = ''; setBusy(true); connect();
 };
-$('#outBtn').onclick = async () => { if (await ask({ title: 'Sign out', text: 'You will leave the network. Your account stays.', ok: 'Sign out' })) { send({ t: 'bye' }); sessionStorage.removeItem('cn:token'); sessionStorage.removeItem('cn:name'); sessionStorage.removeItem('cn:cur'); st.me = ''; st.token = ''; st.loginPw = ''; try { st.ws.close(); } catch { /* ignore */ } location.reload(); } };
+$('#outBtn').onclick = async () => { if (await ask({ title: tr('Sign out'), text: tr('You will leave the network. Your account stays.'), ok: tr('Sign out') })) { send({ t: 'bye' }); sessionStorage.removeItem('cn:token'); sessionStorage.removeItem('cn:name'); sessionStorage.removeItem('cn:cur'); st.me = ''; st.token = ''; st.loginPw = ''; try { st.ws.close(); } catch { /* ignore */ } location.reload(); } };
 $('#statusSel').onchange = e => send({ t: 'status', status: e.target.value });
 
 /* ---------- tabs, clock ---------- */
@@ -508,8 +510,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { de
 
 setTimeout(() => { const h = document.querySelector('.gate .brand h1'); if (h) h.classList.add('glitch'); }, 350);
 
-if (!CN.supported) gateLog('[!] encrypted DMs need HTTPS or localhost', 'bad');
+if (!CN.supported) gateLog(tr('[!] encrypted DMs need HTTPS or localhost'), 'bad');
 
+$('#langBtn').textContent = I18N.lang === 'fa' ? 'English' : '\u0641\u0627\u0631\u0633\u06CC'; $('#langBtn').onclick = () => I18N.setLang(I18N.lang === 'fa' ? 'en' : 'fa');
+I18N.applyStatic();
 $('#unlockBar').onsubmit = async e => { e.preventDefault(); const i = $('#unlockPw'); if (await doUnlock(i.value)) i.value = ''; else i.select(); };
 /* page reload: continue the session with the token kept in this tab, only the encryption key needs the password again */
 (function resumeSession() {

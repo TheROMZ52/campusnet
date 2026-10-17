@@ -1,5 +1,13 @@
 # Release notes
 
+## v0.10.0 - Persian interface
+- Full Persian translation of the UI (sign-in, desktop, Home, Messages, Groups, Music, People, Feed, Alerts, Files, Monitor, Security, Settings, dialogs, toasts) and of the server's error messages. Language: browser default, button on the sign-in screen, Settings > Language
+- Right-to-left content with the Vazirmatn font (bundled, OFL), automatic direction for each chat message, Persian calendar and digits for dates. Window chrome stays left-to-right. The terminal stays English on purpose
+- New `public/i18n.js` (`tr()`, `trn()`, dictionary) and `data-app` on launcher tiles
+- Fixes: Home asked the server for the feed before sign-in (an error toast on the sign-in screen), the server's "session ended" text is now fixed text plus a `reason` field so it can be translated
+- Tests: `npm test` 55 (5 new translation-integrity tests: every `tr()` text, page text and server message must have a Persian entry with matching placeholders), `npm run test:e2e` 24 (4 new: Persian gate/Home/chat, Persian server errors, language switch)
+- Not done: right-to-left mirroring of the window frame, plural rules beyond one/many, translating the terminal
+
 ## v0.9.0 - Home, Music, reload and Back
 - New **Home** page (first window of a fresh desktop and the target of Back): live counters, shortcuts, now playing, unread, alerts, latest posts, announcement
 - New **Music** app: shared audio library, upload, streaming with HTTP byte ranges (seek), shuffle/repeat/volume, system media controls, keeps playing when closed. **Profile song** shown to others in People

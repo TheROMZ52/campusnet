@@ -172,7 +172,7 @@ function addRoomMsg(room, from, text, kind, extra) {
 }
 function dropSession(s, why) {
   sessions.delete(s.token); const w = s.ws;
-  if (w) { s.ws = null; w.s = null; send(w, { t: 'err', fatal: true, text: 'Session ended (' + why + '). Sign in again.' }); try { w.close(); } catch { /* ignore */ } pushUsers(); }
+  if (w) { s.ws = null; w.s = null; send(w, { t: 'err', fatal: true, text: 'Session ended. Sign in again.', reason: why }); try { w.close(); } catch { /* ignore */ } pushUsers(); }
   log('INFO', `session of ${s.name} dropped: ${why}`);
 }
 function authToken(t) {
@@ -182,7 +182,7 @@ function authToken(t) {
 }
 
 /* ---------- HTTP ---------- */
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2' };
 const SEC = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',

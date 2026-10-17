@@ -28,18 +28,18 @@ const Music = (function () {
     } catch { /* optional API */ }
   }
   function play(id) {
-    const f = byId(id); if (!f || !f.aud) { toast('That track is no longer available', 'warn'); return; }
+    const f = byId(id); if (!f || !f.aud) { toast(tr('That track is no longer available'), 'warn'); return; }
     if (S.id !== id) { S.id = id; A.src = `/f/${encodeURIComponent(id)}?audio=1`; }
-    meta(f); A.play().catch(() => toast('Playback was blocked or the file cannot be played', 'bad')); tick();
+    meta(f); A.play().catch(() => toast(tr('Playback was blocked or the file cannot be played'), 'bad')); tick();
   }
-  function toggle() { if (!S.id) { const t = tracks(); if (t.length) play(t[0].id); return; } if (A.paused) A.play().catch(() => toast('Playback blocked', 'bad')); else A.pause(); }
+  function toggle() { if (!S.id) { const t = tracks(); if (t.length) play(t[0].id); return; } if (A.paused) A.play().catch(() => toast(tr('Playback blocked'), 'bad')); else A.pause(); }
   function step(d) {
     const t = tracks(); if (!t.length) return; let i = t.findIndex(x => x.id === S.id);
     if (S.shuffle && t.length > 1) { let j; do { j = Math.floor(Math.random() * t.length); } while (j === i); i = j; } else i = i < 0 ? 0 : (i + d + t.length) % t.length;
     play(t[i].id);
   }
   A.addEventListener('ended', () => { if (S.repeat === 'one') { A.currentTime = 0; A.play().catch(() => {}); return; } const t = tracks(), i = t.findIndex(x => x.id === S.id); if (S.repeat === 'all' || S.shuffle || i < t.length - 1) step(1); else tick(); });
-  A.addEventListener('error', () => { if (S.id) toast('This audio file cannot be played in your browser', 'bad'); tick(); });
+  A.addEventListener('error', () => { if (S.id) toast(tr('This audio file cannot be played in your browser'), 'bad'); tick(); });
   ['play', 'pause', 'timeupdate', 'durationchange', 'loadedmetadata', 'volumechange', 'emptied'].forEach(ev => A.addEventListener(ev, tick));
   document.addEventListener('cn:state', () => { if (S.id && !byId(S.id) && st.files) { A.pause(); S.id = null; A.removeAttribute('src'); A.load(); } tick(); });
 
@@ -49,35 +49,35 @@ const Music = (function () {
   function build(body) {
     body.classList.add('soc', 'music');
     const title = el('div', 'mt'), sub = el('div', 'ms'), seek = el('input'), tc = el('small', null, '0:00'), td = el('small', null, '0:00'), list = el('ul', 'tlist');
-    seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.setAttribute('aria-label', 'Seek'); let drag = false;
+    seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.setAttribute('aria-label', tr('Seek')); let drag = false;
     seek.oninput = () => { drag = true; tc.textContent = fmt(seek.value / 1000 * A.duration); };
     seek.onchange = () => { if (isFinite(A.duration)) A.currentTime = seek.value / 1000 * A.duration; drag = false; };
-    const pp = ib('play', 'Play', toggle), sh = el('button', 'btn sm', 'Shuffle'), rp = el('button', 'btn sm'), vol = el('input');
+    const pp = ib('play', tr('Play'), toggle), sh = el('button', 'btn sm', tr('Shuffle')), rp = el('button', 'btn sm'), vol = el('input');
     sh.type = rp.type = 'button'; sh.onclick = () => { S.shuffle = !S.shuffle; save(); tick(); };
     rp.onclick = () => { S.repeat = { off: 'all', all: 'one', one: 'off' }[S.repeat]; save(); tick(); };
-    vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round(S.vol * 100); vol.setAttribute('aria-label', 'Volume'); vol.oninput = () => { S.vol = vol.value / 100; A.volume = S.vol; save(); };
+    vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round(S.vol * 100); vol.setAttribute('aria-label', tr('Volume')); vol.oninput = () => { S.vol = vol.value / 100; A.volume = S.vol; save(); };
     const file = el('input'); file.type = 'file'; file.multiple = true; file.hidden = true; file.accept = 'audio/*,.mp3,.ogg,.oga,.opus,.wav,.m4a,.aac,.flac,.weba';
-    file.onchange = () => { const ok = [...file.files].filter(f => /\.(mp3|ogg|oga|opus|wav|m4a|aac|flac|weba)$/i.test(f.name)); if (ok.length < file.files.length) toast('Only audio files can be added here', 'warn'); if (ok.length) { enqueue(ok); toast('Uploading ' + ok.length + ' track' + (ok.length > 1 ? 's' : '') + '...', 'ok'); } file.value = ''; };
-    const up = el('button', 'btn sm', 'Upload music'); up.type = 'button'; up.onclick = () => file.click();
-    const bar = el('div', 'row'); bar.append(ib('prev', 'Previous track', () => step(-1)), pp, ib('next', 'Next track', () => step(1)), sh, rp);
-    const now = el('div', 'sbox'), tm = el('div', 'tm'); tm.append(tc, seek, td); now.append(title, sub, tm, bar, el('label', 'chk', 'Volume'), vol);
+    file.onchange = () => { const ok = [...file.files].filter(f => /\.(mp3|ogg|oga|opus|wav|m4a|aac|flac|weba)$/i.test(f.name)); if (ok.length < file.files.length) toast(tr('Only audio files can be added here'), 'warn'); if (ok.length) { enqueue(ok); toast(trn(ok.length, 'Uploading {n} track...', 'Uploading {n} tracks...'), 'ok'); } file.value = ''; };
+    const up = el('button', 'btn sm', tr('Upload music')); up.type = 'button'; up.onclick = () => file.click();
+    const bar = el('div', 'row'); bar.append(ib('prev', tr('Previous track'), () => step(-1)), pp, ib('next', tr('Next track'), () => step(1)), sh, rp);
+    const now = el('div', 'sbox'), tm = el('div', 'tm'); tm.append(tc, seek, td); now.append(title, sub, tm, bar, el('label', 'chk', tr('Volume')), vol);
     body.append(now, up, file, list);
     let sig = '';
     function update() {
       const f = S.id && byId(S.id), l = f ? label(f) : null;
-      title.textContent = l ? l.title : 'Nothing playing'; sub.textContent = l ? l.artist + ' \u00B7 shared by ' + f.owner : 'Pick a track below or upload one';
-      pp.replaceChildren(icon(A.paused ? 'play' : 'pause')); pp.setAttribute('aria-label', A.paused ? 'Play' : 'Pause');
+      title.textContent = l ? l.title : tr('Nothing playing'); sub.textContent = l ? tr('{artist} \u00B7 shared by {name}', { artist: l.artist, name: f.owner }) : tr('Pick a track below or upload one');
+      pp.replaceChildren(icon(A.paused ? 'play' : 'pause')); pp.setAttribute('aria-label', A.paused ? tr('Play') : tr('Pause'));
       if (!drag) { seek.value = isFinite(A.duration) && A.duration ? Math.round(A.currentTime / A.duration * 1000) : 0; tc.textContent = fmt(A.currentTime); } td.textContent = fmt(A.duration);
-      sh.classList.toggle('on', S.shuffle); rp.textContent = 'Repeat: ' + S.repeat; rp.classList.toggle('on', S.repeat !== 'off');
+      sh.classList.toggle('on', S.shuffle); rp.textContent = tr('Repeat: {mode}', { mode: tr(S.repeat) }); rp.classList.toggle('on', S.repeat !== 'off');
       const t = tracks(), mine = st.myProfile.m && st.myProfile.m.id, s2 = t.map(x => x.id).join() + '|' + S.id + '|' + A.paused + '|' + mine + '|' + st.me;
       if (s2 === sig) return; sig = s2; list.replaceChildren();
-      if (!t.length) { list.append(el('li', 'empty', 'No music yet. Upload the first track.')); return; }
+      if (!t.length) { list.append(el('li', 'empty', tr('No music yet. Upload the first track.'))); return; }
       t.forEach(x => {
         const li = el('li', x.id === S.id ? 'new' : ''), lb = label(x), info = el('div', 'pi'), a = el('div', 'acts');
-        const pb = ib(x.id === S.id && !A.paused ? 'pause' : 'play', x.id === S.id && !A.paused ? 'Pause ' + lb.title : 'Play ' + lb.title, () => (x.id === S.id ? toggle() : play(x.id)));
+        const pb = ib(x.id === S.id && !A.paused ? 'pause' : 'play', x.id === S.id && !A.paused ? tr('Pause {title}', { title: lb.title }) : tr('Play {title}', { title: lb.title }), () => (x.id === S.id ? toggle() : play(x.id)));
         info.append(el('b', null, lb.title), el('small', null, lb.artist + ' \u00B7 ' + fmtSize(x.size) + ' \u00B7 ' + x.owner));
-        const on = mine === x.id; a.append(btn2(on ? 'Remove from profile' : 'Profile song', () => setSong(on ? '' : x.id)));
-        if (x.owner === st.me || st.admin) a.append(btn2('Delete', async () => { if (await ask({ title: 'Delete track', text: `"${x.name}" will be removed for everyone.`, ok: 'Delete', danger: true })) send({ t: 'delfile', id: x.id }); }, 'bad'));
+        const on = mine === x.id; a.append(btn2(on ? tr('Remove from profile') : tr('Profile song'), () => setSong(on ? '' : x.id)));
+        if (x.owner === st.me || st.admin) a.append(btn2(tr('Delete'), async () => { if (await ask({ title: tr('Delete track'), text: `"${x.name}" will be removed for everyone.`, ok: tr('Delete'), danger: true })) send({ t: 'delfile', id: x.id }); }, 'bad'));
         li.append(pb, info, a); list.append(li);
       });
     }
@@ -87,9 +87,9 @@ const Music = (function () {
   }
   /* compact player for the Home page */
   function mini() {
-    const box = el('div', 'mini'), t = el('div', 'pi'), nm = el('b'), sb = el('small'), pp = ib('play', 'Play', toggle);
-    t.append(nm, sb); box.append(ib('prev', 'Previous track', () => step(-1)), pp, ib('next', 'Next track', () => step(1)), t);
-    const upd = () => { const f = S.id && byId(S.id), l = f ? label(f) : null; nm.textContent = l ? l.title : 'Nothing playing'; sb.textContent = l ? l.artist : (tracks().length ? tracks().length + ' tracks in the library' : 'No music yet'); pp.replaceChildren(icon(A.paused ? 'play' : 'pause')); };
+    const box = el('div', 'mini'), t = el('div', 'pi'), nm = el('b'), sb = el('small'), pp = ib('play', tr('Play'), toggle);
+    t.append(nm, sb); box.append(ib('prev', tr('Previous track'), () => step(-1)), pp, ib('next', tr('Next track'), () => step(1)), t);
+    const upd = () => { const f = S.id && byId(S.id), l = f ? label(f) : null; nm.textContent = l ? l.title : tr('Nothing playing'); sb.textContent = l ? l.artist : (tracks().length ? tr('{n} tracks in the library', { n: tracks().length }) : tr('No music yet')); pp.replaceChildren(icon(A.paused ? 'play' : 'pause')); };
     subs.add(upd); upd(); box.dispose = () => subs.delete(upd); return box;
   }
   return { build, mini, play, toggle, step, label, tracks, on: f => { subs.add(f); return () => subs.delete(f); }, state: () => ({ id: S.id, paused: A.paused, time: A.currentTime, duration: A.duration, src: A.currentSrc }) };

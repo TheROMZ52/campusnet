@@ -7,20 +7,20 @@
   const os = () => document.body.classList.contains('os');
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const APPS = {
-    home: { title: 'Home', ic: 'home', cat: 'Core', w: 640, h: 560, build: b => Home.build(b) },
-    chat: { title: 'Messages', ic: 'chat', cat: 'Core', sel: '#center', tab: 'chat' },
-    board: { title: 'Board', ic: 'board', cat: 'Core', alias: 'chat' },
-    terminal: { title: 'Terminal', ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
-    nodes: { title: 'Network', ic: 'nodes', cat: 'Network', sel: '#pNodes', tab: 'rooms' },
-    files: { title: 'Files', ic: 'files', cat: 'Network', sel: '#right', tab: 'files' },
-    groups: { title: 'Groups', ic: 'chat', cat: 'Network', w: 480, h: 540, build: b => Social.groups(b) },
-    music: { title: 'Music', ic: 'music', cat: 'Core', w: 460, h: 560, build: b => Music.build(b) },
-    people: { title: 'People', ic: 'nodes', cat: 'Network', w: 460, h: 520, build: b => Social.people(b) },
-    feed: { title: 'Feed', ic: 'board', cat: 'Network', w: 460, h: 520, build: b => Social.feed(b) },
-    alerts: { title: 'Alerts', ic: 'radar', cat: 'Network', w: 420, h: 420, build: b => Social.alerts(b) },
-    monitor: { title: 'Monitor', ic: 'monitor', cat: 'System', w: 460, h: 400, build: buildMonitor },
-    security: { title: 'Security', ic: 'shield', cat: 'System', w: 540, h: 460, build: buildSecurity },
-    settings: { title: 'Settings', ic: 'gear', cat: 'System', w: 440, h: 420, build: buildSettings }
+    home: { title: tr('Home'), ic: 'home', cat: 'Core', w: 640, h: 560, build: b => Home.build(b) },
+    chat: { title: tr('Messages'), ic: 'chat', cat: 'Core', sel: '#center', tab: 'chat' },
+    board: { title: tr('Board'), ic: 'board', cat: 'Core', alias: 'chat' },
+    terminal: { title: tr('Terminal'), ic: 'term', cat: 'Core', w: 560, h: 340, build: buildTerminal },
+    nodes: { title: tr('Network'), ic: 'nodes', cat: 'Network', sel: '#pNodes', tab: 'rooms' },
+    files: { title: tr('Files'), ic: 'files', cat: 'Network', sel: '#right', tab: 'files' },
+    groups: { title: tr('Groups'), ic: 'chat', cat: 'Network', w: 480, h: 540, build: b => Social.groups(b) },
+    music: { title: tr('Music'), ic: 'music', cat: 'Core', w: 460, h: 560, build: b => Music.build(b) },
+    people: { title: tr('People'), ic: 'nodes', cat: 'Network', w: 460, h: 520, build: b => Social.people(b) },
+    feed: { title: tr('Feed'), ic: 'board', cat: 'Network', w: 460, h: 520, build: b => Social.feed(b) },
+    alerts: { title: tr('Alerts'), ic: 'radar', cat: 'Network', w: 420, h: 420, build: b => Social.alerts(b) },
+    monitor: { title: tr('Monitor'), ic: 'monitor', cat: 'System', w: 460, h: 400, build: buildMonitor },
+    security: { title: tr('Security'), ic: 'shield', cat: 'System', w: 540, h: 460, build: buildSecurity },
+    settings: { title: tr('Settings'), ic: 'gear', cat: 'System', w: 440, h: 420, build: buildSettings }
   };
   const wins = {}; let sized = false, zTop = 20, focusId = '', term = null, saveT = 0;
 
@@ -119,27 +119,27 @@
   function closeLauncher() { launcherOpen = false; $('#launcher').classList.remove('ov'); renderLauncher(); }
   function renderLauncher() {
     const box = $('#launcher'); box.replaceChildren();
-    if (box.classList.contains('ov')) { box.append(el('h3', null, 'Apps')); const x = el('button', 'icon-btn ov-close'); x.append(icon('x')); x.setAttribute('aria-label', 'Close apps'); x.onclick = closeLauncher; box.append(x); }
+    if (box.classList.contains('ov')) { box.append(el('h3', null, tr('Apps'))); const x = el('button', 'icon-btn ov-close'); x.append(icon('x')); x.setAttribute('aria-label', tr('Close apps')); x.onclick = closeLauncher; box.append(x); }
     ['Core', 'Network', 'System'].forEach(cat => {
-      box.append(el('div', 'cat', '[ ' + cat + ' ]')); const row = el('div', 'tiles');
+      box.append(el('div', 'cat', '[ ' + tr(cat) + ' ]')); const row = el('div', 'tiles');
       Object.entries(APPS).filter(([, a]) => a.cat === cat).forEach(([id, a]) => {
         const real = a.alias || id, w = wins[real], t = el('button', 'tile' + (w && w.open && os() && !w.min ? ' run' : '')); t.type = 'button';
-        const ico = el('span', 'ico'); ico.append(icon(a.ic)); t.append(ico, el('span', null, a.title)); t.setAttribute('aria-label', 'Open ' + a.title); t.onclick = () => launch(id); row.append(t);
+        const ico = el('span', 'ico'); ico.append(icon(a.ic)); t.append(ico, el('span', null, a.title)); t.dataset.app = id; t.setAttribute('aria-label', tr('Open {name}', { name: a.title })); t.onclick = () => launch(id); row.append(t);
       }); box.append(row);
     });
   }
   function renderDock() {
     const d = $('#dock'); d.replaceChildren();
-    if (window.NetViz) NetViz.setHint(os() && !Object.values(wins).some(w => w.open && !w.min) ? 'NO OPEN WINDOWS  /  SELECT AN APP' : '');
+    if (window.NetViz) NetViz.setHint(os() && !Object.values(wins).some(w => w.open && !w.min) ? tr('NO OPEN WINDOWS  /  SELECT AN APP') : '');
     Object.values(wins).filter(w => w.open).forEach(w => {
-      const b = el('button', 'dk' + (focusId === w.id && !w.min ? ' on' : '') + (w.min ? ' mn' : ''), w.title); b.type = 'button'; b.setAttribute('aria-label', w.title + (w.min ? ' (minimized)' : ''));
+      const b = el('button', 'dk' + (focusId === w.id && !w.min ? ' on' : '') + (w.min ? ' mn' : ''), w.title); b.type = 'button'; b.setAttribute('aria-label', w.min ? tr('{name} (minimized)', { name: w.title }) : w.title);
       b.onclick = () => { if (w.min) { w.min = false; apply(w.id); focus(w.id); } else if (focusId === w.id) minimize(w.id); else focus(w.id); save(); }; d.append(b);
     });
   }
   const setStatus = s => { $('#statusSel').value = s; send({ t: 'status', status: s }); };
   const togglePref = k => { prefs[k] = !prefs[k]; savePrefs(); applyPrefs(); };
   const MENUS = {
-    System: [['About CampusNet OS', () => toast('CampusNet OS: a private mesh network. Windows, apps and encrypted messages run in your browser.')], ['Lock screen', () => lock()], ['Sign out...', () => $('#outBtn').click()]],
+    System: [['About CampusNet OS', () => toast(tr('CampusNet OS: a private mesh network. Windows, apps and encrypted messages run in your browser.'))], ['Lock screen', () => lock()], ['Sign out...', () => $('#outBtn').click()]],
     File: [['Upload files...', () => $('#fileIn').click()]],
     Edit: [['Find in chat', () => { launch('chat'); $('#find').focus(); }], ['Filter files', () => { launch('files'); $('#ffind').focus(); }], ['Clear chat view', () => $('#log').replaceChildren()]],
     View: [['Tile windows', tile], ['Close all windows', closeAll], ['CRT scanlines', () => togglePref('crt'), () => prefs.crt], ['Network mesh', () => togglePref('mesh'), () => prefs.mesh]],
@@ -156,7 +156,7 @@
       wrap.append(dd); const b = wrap.firstChild; b.classList.add('on'); b.setAttribute('aria-expanded', 'true');
     };
     Object.keys(MENUS).forEach(name => {
-      const wrap = el('div', 'mwrap'), b = el('button', 'mb', name); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.setAttribute('aria-haspopup', 'true'); b.setAttribute('aria-expanded', 'false');
+      const wrap = el('div', 'mwrap'), b = el('button', 'mb', tr(name)); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.setAttribute('aria-haspopup', 'true'); b.setAttribute('aria-expanded', 'false');
       b.onclick = () => (openName === name ? closeMenu() : openMenu(name, wrap)); b.onmouseenter = () => { if (openName && openName !== name) openMenu(name, wrap); };
       wrap.append(b); bar.append(wrap);
     });
@@ -216,13 +216,13 @@
   }
   function buildMonitor(body) {
     body.classList.add('mon'); const cards = {}, mk = (k, label, wide) => { const c = el('div', 'stat' + (wide ? ' wide' : '')); c.append(el('small', null, label)); cards[k] = el('b', null, '--'); c.append(cards[k]); body.append(c); return c; };
-    if (IS_DEMO) body.append(el('p', 'note wide', 'Demo mode: nodes and latency below are simulated in your browser.'));
-    ['link:Link', 'lat:HTTP latency', 'ws:WebSocket latency', 'nodes:Nodes online', 'files:Library', 'unread:Unread', 'up:Session', 'e2e:Encryption'].forEach(s => { const [k, l] = s.split(':'); mk(k, l); });
-    const sc = mk('spark', 'Latency history', true), cv = el('canvas'); cv.setAttribute('aria-label', 'Latency history graph'); cv.setAttribute('role', 'img'); sc.append(cv); cards.spark.remove();
+    if (IS_DEMO) body.append(el('p', 'note wide', tr('Demo mode: nodes and latency below are simulated in your browser.')));
+    ['link:Link', 'lat:HTTP latency', 'ws:WebSocket latency', 'nodes:Nodes online', 'files:Library', 'unread:Unread', 'up:Session', 'e2e:Encryption'].forEach(s => { const [k, l] = s.split(':'); mk(k, tr(l)); });
+    const sc = mk('spark', tr('Latency history'), true), cv = el('canvas'); cv.setAttribute('aria-label', tr('Latency history graph')); cv.setAttribute('role', 'img'); sc.append(cv); cards.spark.remove();
     const draw = () => {
       const w = cv.clientWidth, h = cv.clientHeight; if (!w) return; cv.width = w * 2; cv.height = h * 2; const g = cv.getContext('2d'); g.scale(2, 2); g.clearRect(0, 0, w, h);
       const v = st.lat.filter(x => x != null); g.strokeStyle = 'rgba(51,255,102,.12)'; for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(0, h * i / 4); g.lineTo(w, h * i / 4); g.stroke(); }
-      if (v.length < 2) { g.fillStyle = 'rgba(138,165,149,.9)'; g.font = '11px ui-monospace,monospace'; g.fillText('collecting samples...', 8, h / 2); return; }
+      if (v.length < 2) { g.fillStyle = 'rgba(138,165,149,.9)'; g.font = '11px ui-monospace,monospace'; g.fillText(tr('collecting samples...'), 8, h / 2); return; }
       const mx = Math.max(20, ...v) * 1.15; g.strokeStyle = '#33ff66'; g.lineWidth = 1.5; g.shadowColor = '#33ff66'; g.shadowBlur = 6; g.beginPath();
       v.forEach((x, i) => { const px = i / (v.length - 1) * (w - 4) + 2, py = h - 4 - x / mx * (h - 8); i ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke();
     };
@@ -232,28 +232,28 @@
       cards.link.textContent = $('#stat').textContent.toUpperCase(); cards.lat.textContent = v.length ? v[v.length - 1] + ' ms' : '--'; cards.ws.textContent = st.wsLat != null ? st.wsLat + ' ms' : '--';
       cards.nodes.textContent = st.users.length + ' / ' + (st.all.length || st.users.length); cards.files.textContent = st.files.length + ' \u00B7 ' + sz(st.files.reduce((a, f) => a + f.size, 0));
       cards.unread.textContent = un; cards.up.textContent = st.t0 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m ${s % 60}s` : '--';
-      cards.e2e.textContent = !CN.supported ? 'UNAVAILABLE' : E2E.priv ? 'ACTIVE' : 'NOT READY'; draw();
+      cards.e2e.textContent = !CN.supported ? tr('UNAVAILABLE') : E2E.priv ? tr('ACTIVE') : tr('NOT READY'); draw();
     }
     document.addEventListener('cn:state', () => { if (!body.closest('.wclosed')) render(); }); setInterval(() => { if (!body.closest('.wclosed')) render(); }, 1000); render();
   }
   function buildSecurity(body) {
     body.classList.add('sec'); const me = el('div', 'stat'), list = el('div'), fpc = {}, cmpVals = {};
-    body.append(me, el('p', 'note', 'Direct messages are encrypted in your browser (ECDH P-256 + AES-256-GCM). The server only relays ciphertext. Channels, files and notices are not encrypted. Compare safety numbers with your contact over another channel to be sure nobody swapped a key.'), el('small', 'dim', 'CONTACTS'), list);
+    body.append(me, el('p', 'note', tr('Direct messages are encrypted in your browser (ECDH P-256 + AES-256-GCM). The server only relays ciphertext. Channels, files and notices are not encrypted. Compare safety numbers with your contact over another channel to be sure nobody swapped a key.')), el('small', 'dim', tr('CONTACTS')), list);
     let tok = 0;
     async function render() {
-      const my = ++tok; me.replaceChildren(el('small', null, 'Your safety number'), el('div', 'fp', !CN.supported ? 'Unavailable: open the site over HTTPS or localhost.' : E2E.priv ? E2E.fp : 'Key not ready'));
-      if (E2E.priv) { const cp = el('button', 'btn', 'Copy'); cp.type = 'button'; cp.style.cssText = 'margin-top:8px;min-height:30px'; cp.onclick = () => { try { navigator.clipboard.writeText(E2E.fp); toast('Safety number copied'); } catch { toast('Copy failed', 'bad'); } }; me.append(cp); }
+      const my = ++tok; me.replaceChildren(el('small', null, tr('Your safety number')), el('div', 'fp', !CN.supported ? tr('Unavailable: open the site over HTTPS or localhost.') : E2E.priv ? E2E.fp : tr('Key not ready')));
+      if (E2E.priv) { const cp = el('button', 'btn', tr('Copy')); cp.type = 'button'; cp.style.cssText = 'margin-top:8px;min-height:30px'; cp.onclick = () => { try { navigator.clipboard.writeText(E2E.fp); toast(tr('Safety number copied')); } catch { toast(tr('Copy failed'), 'bad'); } }; me.append(cp); }
       const rows = []; const names = Object.keys(E2E.keys).filter(n => n !== st.me).sort((a, b) => a.localeCompare(b));
-      if (!names.length) rows.push(el('p', 'note', 'No contacts with keys yet.'));
+      if (!names.length) rows.push(el('p', 'note', tr('No contacts with keys yet.')));
       for (const n of names) {
         const pub = E2E.keys[n]; if (!fpc[pub.x]) fpc[pub.x] = await CN.fingerprint(pub);
         const s = E2E.state[n] || (tofu[n] ? (tofu[n].fp === fpc[pub.x] ? (tofu[n].v ? 'verified' : 'ok') : 'changed') : 'new');
-        const p = el('div', 'peer'); p.append(el('span', 'pn', n), el('span', 'pill ' + s, s === 'changed' ? 'key changed' : s === 'new' ? 'not used yet' : s), el('div', 'fp', fpc[pub.x]));
-        const cmp = el('input'), res = el('small', 'cmpres'); cmp.placeholder = 'Paste their safety number to compare'; cmp.setAttribute('aria-label', 'Their safety number'); cmp.autocomplete = 'off'; cmp.spellcheck = false;
-        cmp.value = cmpVals[n] || ''; cmp.oninput = () => { cmpVals[n] = cmp.value; const norm = x => String(x).replace(/[^0-9a-f]/gi, '').toLowerCase(), v = norm(cmp.value); res.replaceChildren(); res.className = 'cmpres'; if (!v) return; if (v === norm(fpc[pub.x])) { res.classList.add('ok'); res.append('Match. This is the key we use for ' + n + '. '); if (tofu[n] && s !== 'verified') { const b = el('button', 'btn', 'Mark verified'); b.type = 'button'; b.onclick = () => { cmp.blur(); markVerified(n, true); }; res.append(b); } } else if (v.length >= norm(fpc[pub.x]).length) { res.classList.add('bad'); res.append('Does NOT match. Do not trust this key until you have checked with ' + n + ' in person or by phone.'); } else res.append('Keep typing...'); };
+        const p = el('div', 'peer'); p.append(el('span', 'pn', n), el('span', 'pill ' + s, s === 'changed' ? tr('key changed') : s === 'new' ? tr('not used yet') : tr(s)), el('div', 'fp', fpc[pub.x]));
+        const cmp = el('input'), res = el('small', 'cmpres'); cmp.placeholder = tr('Paste their safety number to compare'); cmp.setAttribute('aria-label', tr('Their safety number')); cmp.autocomplete = 'off'; cmp.spellcheck = false;
+        cmp.value = cmpVals[n] || ''; cmp.oninput = () => { cmpVals[n] = cmp.value; const norm = x => String(x).replace(/[^0-9a-f]/gi, '').toLowerCase(), v = norm(cmp.value); res.replaceChildren(); res.className = 'cmpres'; if (!v) return; if (v === norm(fpc[pub.x])) { res.classList.add('ok'); res.append('Match. This is the key we use for ' + n + '. '); if (tofu[n] && s !== 'verified') { const b = el('button', 'btn', tr('Mark verified')); b.type = 'button'; b.onclick = () => { cmp.blur(); markVerified(n, true); }; res.append(b); } } else if (v.length >= norm(fpc[pub.x]).length) { res.classList.add('bad'); res.append('Does NOT match. Do not trust this key until you have checked with ' + n + ' in person or by phone.'); } else res.append(tr('Keep typing...')); };
         p.append(cmp, res); if (cmp.value) cmp.oninput();
-        if (s === 'changed') { const b = el('button', 'btn', 'Trust new key'); b.type = 'button'; b.onclick = () => { E2E.pending[n] = E2E.pending[n] || fpc[pub.x]; trustKey(n); }; p.append(b); }
-        else if (tofu[n]) { const b = el('button', 'btn', s === 'verified' ? 'Unmark' : 'Mark verified'); b.type = 'button'; b.onclick = () => markVerified(n, s !== 'verified'); p.append(b); }
+        if (s === 'changed') { const b = el('button', 'btn', tr('Trust new key')); b.type = 'button'; b.onclick = () => { E2E.pending[n] = E2E.pending[n] || fpc[pub.x]; trustKey(n); }; p.append(b); }
+        else if (tofu[n]) { const b = el('button', 'btn', s === 'verified' ? tr('Unmark') : tr('Mark verified')); b.type = 'button'; b.onclick = () => markVerified(n, s !== 'verified'); p.append(b); }
         rows.push(p);
       }
       if (my === tok) list.replaceChildren(...rows);
@@ -264,14 +264,14 @@
     body.classList.add('set');
     const tog = (k, label) => { const l = el('label', 'tog'), i = el('input'); i.type = 'checkbox'; i.checked = prefs[k] !== false && !!prefs[k] || (k === 'boot' && prefs.boot !== false); i.onchange = () => { prefs[k] = i.checked; savePrefs(); applyPrefs(); }; l.append(el('span', null, label), i); return l; };
     const btn = (t, fn) => { const b = el('button', 'btn', t); b.type = 'button'; b.onclick = fn; return b; }, row = el('div', 'row');
-    row.append(btn('Reset window layout', () => { if (os()) tile(); else toast('Window layout applies on large screens'); }), btn('Forget trusted keys', async () => { if (await ask({ title: 'Forget trusted keys', text: 'Safety numbers you saved on this device will be cleared. Contacts are checked again the next time you message them.', ok: 'Forget', danger: true })) { forgetKeys(); toast('Trusted keys cleared'); } }));
-    body.append(tog('boot', 'Boot animation after sign-in'), tog('crt', 'CRT scanlines and vignette'), tog('mesh', 'Animated network background'), tog('sound', 'Sound alerts for DMs and mentions'), row, el('p', 'note', 'Settings are stored in this browser only.'));
+    row.append(btn(tr('Reset window layout'), () => { if (os()) tile(); else toast(tr('Window layout applies on large screens')); }), btn(tr('Forget trusted keys'), async () => { if (await ask({ title: tr('Forget trusted keys'), text: tr('Safety numbers you saved on this device will be cleared. Contacts are checked again the next time you message them.'), ok: tr('Forget'), danger: true })) { forgetKeys(); toast(tr('Trusted keys cleared')); } }));
+    body.append(langRow(), tog('boot', tr('Boot animation after sign-in')), tog('crt', tr('CRT scanlines and vignette')), tog('mesh', tr('Animated network background')), tog('sound', tr('Sound alerts for DMs and mentions')), row, el('p', 'note', tr('Settings are stored in this browser only.')));
   }
 
   /* ---------- OS pieces: messages sidebar, start menu, lock screen, boot ---------- */
   function mountSidebar(on) {
     const c = $('#center'); let side = $('#msgSide');
-    if (on && !side) { side = el('div', 'msgside'); side.id = 'msgSide'; side.append(el('div', 'sh', 'Channels'), $('#rooms'), el('div', 'sh', 'People'), $('#users')); c.insertBefore(side, $('#log')); }
+    if (on && !side) { side = el('div', 'msgside'); side.id = 'msgSide'; side.append(el('div', 'sh', tr('Channels')), $('#rooms'), el('div', 'sh', tr('People')), $('#users')); c.insertBefore(side, $('#log')); }
     else if (!on && side) { $('#pChannels').append($('#rooms')); $('#pNodes').append($('#users')); side.remove(); }
   }
   const startMenu = $('#startmenu'), startBtn = $('#startBtn');
@@ -279,10 +279,10 @@
   function renderStart() {
     startMenu.replaceChildren(); const head = el('div', 'sm-head'); head.append(el('span', 'av', st.me ? st.me[0] : '?'), el('b', null, st.me || 'guest'), el('small', 'dim', st.admin ? 'admin' : 'user')); startMenu.append(head);
     ['Core', 'Network', 'System'].forEach(cat => {
-      startMenu.append(el('div', 'cat', '[ ' + cat + ' ]'));
+      startMenu.append(el('div', 'cat', '[ ' + tr(cat) + ' ]'));
       Object.entries(APPS).filter(([, a]) => a.cat === cat).forEach(([id, a]) => { const it = el('button', 'mi'); it.type = 'button'; it.setAttribute('role', 'menuitem'); it.append(icon(a.ic), a.title); it.onclick = () => { closeStart(); launch(id); }; startMenu.append(it); });
     });
-    const foot = el('div', 'sm-foot'), lk = el('button', 'btn', 'Lock'), so = el('button', 'btn', 'Sign out'); lk.type = so.type = 'button';
+    const foot = el('div', 'sm-foot'), lk = el('button', 'btn', tr('Lock')), so = el('button', 'btn', tr('Sign out')); lk.type = so.type = 'button';
     lk.onclick = () => { closeStart(); lock(); }; so.onclick = () => { closeStart(); $('#outBtn').click(); }; foot.append(lk, so); startMenu.append(foot);
   }
   startBtn.onclick = e => { e.stopPropagation(); if (startMenu.hidden) { renderStart(); startMenu.hidden = false; startBtn.setAttribute('aria-expanded', 'true'); const f = startMenu.querySelector('.mi'); if (f) f.focus(); } else closeStart(); };
@@ -294,7 +294,7 @@
   $('#lockForm').onsubmit = e => {
     e.preventDefault();
     if (st.loginPw && $('#lockPw').value === st.loginPw) { $('#lock').hidden = true; $('#app').inert = false; return; }
-    $('#lockErr').textContent = 'Wrong password.'; const f = $('#lockForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
+    $('#lockErr').textContent = tr('Wrong password.'); const f = $('#lockForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
   };
   $('#lockOut').onclick = () => { $('#lock').hidden = true; $('#app').inert = false; $('#outBtn').click(); };
   let booted = false;
@@ -320,7 +320,7 @@
   buildMenubar(); setMode();
   mq.addEventListener('change', () => { closeLauncher(); setMode(); });
   addEventListener('resize', () => { if (os()) { Object.values(wins).forEach(fit); Object.keys(wins).forEach(apply); } });
-  $('#appsBtn').setAttribute('aria-label', 'Apps'); $('#appsBtn').replaceChildren(icon('apps'));
+  $('#appsBtn').setAttribute('aria-label', tr('Apps')); $('#appsBtn').replaceChildren(icon('apps'));
   $('#appsBtn').onclick = () => { launcherOpen = true; $('#launcher').classList.add('ov'); renderLauncher(); };
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#launcher').classList.contains('ov')) closeLauncher(); });
   document.addEventListener('cn:state', () => { if (os() && !sized && desk.clientWidth > 0) { restore(); Object.keys(wins).forEach(apply); if (focusId) focus(focusId); } renderDock(); });

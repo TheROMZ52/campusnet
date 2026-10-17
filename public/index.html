@@ -23,6 +23,7 @@
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l17 10v22L24 45 7 35V13z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M24 14l8 5v10l-8 5-8-5V19z" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"/><circle cx="24" cy="24" r="3" fill="currentColor"/><path d="M24 3v8M24 37v8M7 13l7 4M41 13l-7 4M7 35l7-4M41 35l-7-4" stroke="currentColor" stroke-width="1" opacity=".5"/></svg>
       <div><h1 id="siteName">CampusNet</h1><p class="sub">private mesh network</p></div>
     </div>
+    <button id="langBtn" class="lang" type="button" aria-label="Language" data-nt></button>
     <div class="seg" role="tablist" aria-label="Account">
       <button type="button" role="tab" id="tabIn" aria-selected="true">Sign in</button>
       <button type="button" role="tab" id="tabUp" aria-selected="false">Register</button>
@@ -83,7 +84,7 @@
       <form id="form" autocomplete="off">
         <button class="icon-btn" id="attach" type="button" aria-label="Attach files" title="Attach files"></button>
         <span class="prompt" aria-hidden="true">&gt;</span>
-        <input id="inp" aria-label="Message" maxlength="1000" placeholder="Message, or /help" autocomplete="off" enterkeyhint="send">
+        <input id="inp" dir="auto" aria-label="Message" maxlength="1000" placeholder="Message, or /help" autocomplete="off" enterkeyhint="send">
         <button class="btn primary send" type="submit" aria-label="Send"></button>
       </form>
     </section>
@@ -144,6 +145,7 @@
 <script src="net.js"></script>
 <script src="crypto.js"></script>
 <script src="demo.js"></script>
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 <script src="music.js"></script>
 <script src="social.js"></script>
