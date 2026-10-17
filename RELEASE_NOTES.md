@@ -1,5 +1,12 @@
 # Release notes
 
+## v0.11.0 - deployment that works offline
+- **No runtime dependencies to install:** `ws` is vendored in `vendor/ws` (MIT, version in its package.json) and `package.json` has an empty `dependencies`. A host that runs `npm install` on every start no longer needs the npm registry
+- `npm run pack` builds `dist/campusnet-<version>.zip` (about 250 KB, files at the root, start file `server.js`) with a built-in zip writer, no external tools. Tests, data, CI files and `node_modules` are left out
+- New `DEPLOY.md` and `DEPLOY.fa.md`: host requirements (WebSocket, persistent `DATA_DIR`, HTTPS), environment variables, first-run checklist (including "restart and check the account is still there"), updates, backups, and notes for when the international internet is cut
+- Tests: `npm test` 58 (3 new: the zip has the right files at its root, no runtime dependencies, and the extracted zip starts with no `node_modules`, serves the page, answers `/healthz` and accepts a WebSocket sign-up). The 55 server tests also pass with `node_modules` removed
+- Not done: voice calls, PWA/service worker caching
+
 ## v0.10.0 - Persian interface
 - Full Persian translation of the UI (sign-in, desktop, Home, Messages, Groups, Music, People, Feed, Alerts, Files, Monitor, Security, Settings, dialogs, toasts) and of the server's error messages. Language: browser default, button on the sign-in screen, Settings > Language
 - Right-to-left content with the Vazirmatn font (bundled, OFL), automatic direction for each chat message, Persian calendar and digits for dates. Window chrome stays left-to-right. The terminal stays English on purpose

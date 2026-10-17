@@ -1,19 +1,18 @@
 {
   "name": "campusnet",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "A tiny campus-style intranet: public/private chat, file sharing and a live online list. Runs on a LAN or online.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/server.test.js tests/social.test.js tests/groups.test.js tests/music.test.js tests/i18n.test.js",
-    "test:e2e": "node --test tests/e2e/e2e.test.js tests/e2e/features.test.js tests/e2e/groups.test.js tests/e2e/v09.test.js tests/e2e/fa.test.js"
+    "test": "node --test tests/server.test.js tests/social.test.js tests/groups.test.js tests/music.test.js tests/i18n.test.js tests/deploy.test.js",
+    "test:e2e": "node --test tests/e2e/e2e.test.js tests/e2e/features.test.js tests/e2e/groups.test.js tests/e2e/v09.test.js tests/e2e/fa.test.js",
+    "pack": "node scripts/pack.js"
   },
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {
-    "ws": "^8.18.0"
-  },
+  "dependencies": {},
   "license": "MIT",
   "devDependencies": {
     "playwright-core": "^1.56.0"

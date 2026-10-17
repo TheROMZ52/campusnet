@@ -4,7 +4,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http'), crypto = require('node:crypto');
-const WebSocket = require('ws');
+const WebSocket = require('../vendor/ws');
 const ROOT = path.join(__dirname, '..'), sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function startServer(env = {}, dir) {

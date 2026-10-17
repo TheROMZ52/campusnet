@@ -98,6 +98,9 @@ docker run -d -p 3000:3000 -e ACCESS_CODE=secret -v campusnet-data:/data campusn
 ```
 Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client automatically uses `wss://` on HTTPS pages.
 
+## Deploying
+See `DEPLOY.md` (English) and `DEPLOY.fa.md` (فارسی). `npm run pack` builds `dist/campusnet-<version>.zip` with files at the root and `server.js` as the start file. There is nothing to install: the only library (`ws`) is vendored in `vendor/ws`, so a start never needs npm, git or any international site. The docs cover the host requirements (WebSocket, persistent `DATA_DIR`, HTTPS), the environment variables, a first-run checklist and what to do if the international internet is cut.
+
 ## Security
 **Threat model.** CampusNet is built for a trusted-ish LAN or a small public server run by someone you know. It defends against: other users trying to crash the server, claim the admin name, read other people's files or DMs, exhaust disk space, or brute-force logins; and against passive network observers (when HTTPS is used). It does **not** defend against a malicious server operator (they serve the client code and receive your password at sign-in), a compromised browser or device, or traffic analysis (who talks to whom and when is visible to the server).
 
@@ -125,7 +128,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (55, no browser). `npm run test:e2e` (24 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (58, no browser). `npm run test:e2e` (24 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

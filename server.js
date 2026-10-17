@@ -3,7 +3,7 @@
    Security model: see README ("Security"). Persistence: atomic JSON files in DATA_DIR with .bak fallback. */
 const http = require('http'), https = require('https'), fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
 const { execFileSync } = require('child_process');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer } = require('./vendor/ws');
 
 const log = (lvl, msg) => console.log(`${new Date().toISOString()} ${lvl} ${msg}`);
 const bail = m => { console.error('\n  configuration error: ' + m + '\n'); process.exit(1); };
