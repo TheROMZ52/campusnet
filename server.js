@@ -133,6 +133,20 @@ function peerReadsFor(name) {
   const o = {}, me = ukey(name); for (const other of Object.keys(dmsFor(name))) { const r = urec(other); if (r && !(r.profile && r.profile.receipts === false) && r.reads && r.reads['d:' + me]) o[r.name] = r.reads['d:' + me]; } return o;
 }
 const toUser = (name, o) => { const t = findByName(name); if (t) send(t.ws, o); };
+/* voice calls (v0.12): the server only signals and relays encrypted audio frames between the two people; nothing is stored */
+const RING_MS = num('CALL_RING_MS', 45000), calls = new Map(), inCall = new Map();
+function endCall(id, reason) {
+  const c = calls.get(id); if (!c) return; clearTimeout(c.timer); calls.delete(id); inCall.delete(ukey(c.a)); inCall.delete(ukey(c.b));
+  toUser(c.a, { t: 'callstate', id, state: 'ended', reason, peer: c.b }); toUser(c.b, { t: 'callstate', id, state: 'ended', reason, peer: c.a });
+  if (reason === 'noanswer' || (reason === 'cancelled' && c.state === 'ringing')) notify(c.b, { type: 'missed', from: c.a, text: 'missed call' });
+}
+const endCallOf = (name, reason) => { const id = inCall.get(ukey(name)); if (id) endCall(id, reason); };
+function relayAudio(ws, buf) {
+  const s = ws.s; if (!s || buf.length < 6 || buf.length > 2048 || buf[0] !== 1) return;
+  const c = calls.get(inCall.get(ukey(s.name))); if (!c || c.state !== 'active') return;
+  const now = Date.now(); if (now - (ws.fr0 || 0) > 1000) { ws.fr0 = now; ws.fn = 0; } if (++ws.fn > 80) return;   // at most 80 frames a second
+  const o = findByName(ukey(c.a) === ukey(s.name) ? c.b : c.a); if (o && o.ws && o.ws.readyState === 1 && o.ws.bufferedAmount < 262144) o.ws.send(buf, { binary: true });
+}
 const toBoth = (msg, o) => { [msg.from, msg.to].forEach(n => { const t = findByName(n); if (t) send(t.ws, o); }); };
 
 /* orphan cleanup: upload files that no record points to (crashed uploads) */
@@ -171,7 +185,7 @@ function addRoomMsg(room, from, text, kind, extra) {
   saveRoom(room); toRoom(room, { t: 'msg', m }); return m;
 }
 function dropSession(s, why) {
-  sessions.delete(s.token); const w = s.ws;
+  endCallOf(s.name, 'disconnect'); sessions.delete(s.token); const w = s.ws;
   if (w) { s.ws = null; w.s = null; send(w, { t: 'err', fatal: true, text: 'Session ended. Sign in again.', reason: why }); try { w.close(); } catch { /* ignore */ } pushUsers(); }
   log('INFO', `session of ${s.name} dropped: ${why}`);
 }
@@ -185,7 +199,7 @@ function authToken(t) {
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2' };
 const SEC = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()',
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   ...(TLS ? { 'Strict-Transport-Security': 'max-age=15552000' } : {})
 };
@@ -462,6 +476,21 @@ function onMessage(ws, m) {
   } else if (m.t === 'delpost') {
     const p = posts.find(x => x.id === m.id); if (!p || (p.by !== s.name && !s.admin)) return;
     posts.splice(posts.indexOf(p), 1); save('posts.json', posts); bcast({ t: 'pdel', id: p.id });
+  } else if (m.t === 'call') {
+    const tg = urec(m.to), me = urec(s.name);
+    if (!tg || tg === me || blocksEither(s.name, tg.name) || typeof m.nonce !== 'string' || !/^[A-Za-z0-9+/=]{4,12}$/.test(m.nonce)) return send(ws, { t: 'err', text: 'This call could not be started.' });
+    if (inCall.has(ukey(s.name))) return send(ws, { t: 'err', text: 'You are already in a call.' });
+    const id = uid(), target = findByName(tg.name);
+    if (!target || !target.ws) return send(ws, { t: 'callstate', id, state: 'offline', peer: tg.name });
+    if (inCall.has(ukey(tg.name))) return send(ws, { t: 'callstate', id, state: 'busy', peer: tg.name });
+    calls.set(id, { id, a: s.name, b: tg.name, state: 'ringing', timer: setTimeout(() => endCall(id, 'noanswer'), RING_MS) }); inCall.set(ukey(s.name), id); inCall.set(ukey(tg.name), id);
+    send(ws, { t: 'callstate', id, state: 'ringing', peer: tg.name }); send(target.ws, { t: 'incoming', id, from: s.name, nonce: m.nonce });
+  } else if (m.t === 'callans') {
+    const c = calls.get(m.id); if (!c || c.state !== 'ringing' || ukey(c.b) !== ukey(s.name)) return;
+    if (!m.accept) return endCall(c.id, 'declined');
+    clearTimeout(c.timer); c.state = 'active'; toUser(c.a, { t: 'callstate', id: c.id, state: 'accepted', peer: c.b }); send(ws, { t: 'callstate', id: c.id, state: 'accepted', peer: c.a });
+  } else if (m.t === 'callend') {
+    const c = calls.get(m.id); if (!c || ukey(c.a) !== ukey(s.name) && ukey(c.b) !== ukey(s.name)) return; endCall(c.id, c.state === 'ringing' && ukey(c.a) === ukey(s.name) ? 'cancelled' : 'ended');
   } else if (m.t === 'ping') {
     send(ws, { t: 'pong', id: String(m.id || '').slice(0, 32) });
   } else if (m.t === 'gcreate') {
@@ -507,14 +536,15 @@ wss.on('connection', (ws, req) => {
   if (c > MAX_CONN_IP) { ws.close(1013, 'too many connections'); return; }
   ws.alive = true; ws.hits = []; ws.on('pong', () => { ws.alive = true; });
   ws.joinTimer = setTimeout(() => { if (!ws.s) ws.terminate(); }, JOIN_TIMEOUT);
-  ws.on('message', raw => {
+  ws.on('message', (raw, isBinary) => {
+    if (isBinary) return relayAudio(ws, raw);
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
     try { onMessage(ws, m); } catch (e) { log('ERROR', `handler "${String(m.t).slice(0, 20)}" failed: ${e.stack || e.message}`); send(ws, { t: 'err', text: 'Server error.' }); }
   });
   ws.on('close', () => {
     clearTimeout(ws.joinTimer); const s = ws.s;
-    if (s && s.ws === ws) { s.ws = null; pushUsers(); addRoomMsg('general', 'system', `${s.name} disconnected`, 'sys'); }
+    if (s && s.ws === ws) { s.ws = null; endCallOf(s.name, 'disconnect'); pushUsers(); addRoomMsg('general', 'system', `${s.name} disconnected`, 'sys'); }
   });
   ws.on('error', () => {});
 });

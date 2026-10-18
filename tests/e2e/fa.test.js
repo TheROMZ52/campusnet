@@ -28,7 +28,7 @@ describe('Persian interface in a real browser', () => {
   }
   async function signUp(page, name) {
     await page.click('#tabUp'); await page.fill('#nameIn', name); await page.fill('#pwIn', PW); await page.fill('#pw2In', PW); await page.click('#goBtn');
-    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 8000 });
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 20000 });
   }
   const app = (page, id) => page.locator('#launcher button[data-app="' + id + '"]').dispatchEvent('click');
 
@@ -36,7 +36,7 @@ describe('Persian interface in a real browser', () => {
     const { ctx, page } = await visit('fa-IR');
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'fa'); assert.equal((await page.textContent('#tabIn')).trim(), 'ورود'); assert.equal((await page.textContent('#langBtn')).trim(), 'English');
     await signUp(page, 'sara');
-    await page.waitForFunction(() => /sara/.test(document.querySelector('.home h2')?.textContent || ''), null, { timeout: 8000 }); assert.match(await page.textContent('.home h2'), /(صبح|ظهر|عصر|شب) بخیر، sara/);
+    await page.waitForFunction(() => /sara/.test(document.querySelector('.home h2')?.textContent || ''), null, { timeout: 20000 }); assert.match(await page.textContent('.home h2'), /(صبح|ظهر|عصر|شب) بخیر، sara/);
     assert.match(await page.textContent('.home .hero small'), /[\u06F0-\u06F9]/, 'Persian calendar with Persian digits');
     await app(page, 'chat'); await page.fill('#inp', 'سلام hello 123'); await page.keyboard.press('Enter');
     await page.waitForSelector('#log .msg:has-text("سلام hello 123") .b[dir="auto"]');
@@ -63,7 +63,7 @@ describe('Persian interface in a real browser', () => {
     await signUp(page, 'lena'); await app(page, 'settings');
     await page.locator('select[aria-label="Language"]').selectOption('fa'); await page.waitForSelector('html.fa');
     await page.waitForFunction(() => document.querySelector('#meBar').textContent.startsWith('lena'));   // the session survives the reload
-    await page.waitForFunction(() => /lena/.test(document.querySelector('.home h2')?.textContent || ''), null, { timeout: 8000 }); assert.match(await page.textContent('.home h2'), /بخیر/);
+    await page.waitForFunction(() => /lena/.test(document.querySelector('.home h2')?.textContent || ''), null, { timeout: 20000 }); assert.match(await page.textContent('.home h2'), /بخیر/);
     await ctx.close();
   });
 

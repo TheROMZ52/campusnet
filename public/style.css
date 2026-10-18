@@ -544,3 +544,11 @@ html.fa .msg{direction:rtl}
 html.fa .msg .t,html.fa .fp,html.fa .tout,html.fa .tin,html.fa input[type=password]{direction:ltr}
 html.fa .soc .row{justify-content:flex-start}
 html.fa .home ul.hl small{text-align:left}
+
+/* ---- v0.12: voice calls ---- */
+.callbox{position:fixed;right:16px;bottom:72px;z-index:9999;width:min(300px,calc(100vw - 32px));display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--neon);border-radius:var(--r);background:var(--bg2);box-shadow:0 0 24px rgba(51,255,106,.18)}
+.callbox[hidden]{display:none}
+.callbox .cn{font:700 18px var(--sans)}.callbox .cs{color:var(--neon);font-size:13px}.callbox .cz{color:var(--faint)}
+.callbox .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.callbox .btn.ok{border-color:var(--neon);color:var(--neon)}.callbox .btn.bad{color:var(--bad)}.callbox .btn.on{border-color:var(--warn);color:var(--warn)}
+html.fa .callbox{direction:rtl}

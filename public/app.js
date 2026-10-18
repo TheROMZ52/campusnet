@@ -147,9 +147,11 @@ function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   st.ws = ws; if (!st.me) gateLog('[*] opening link...');
   ws.onopen = () => { if (!st.me) gateLog('[*] authenticating...'); ws.send(JSON.stringify({ t: 'join', mode: st.mode, name: st.me || st.loginName, password: st.loginPw, code: st.loginCode, token: st.token, adminCode: st.loginAdm })); };
-  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => handle(m)).catch(err => console.error(err)); };
+  ws.binaryType = 'arraybuffer';
+  ws.onmessage = e => { if (typeof e.data !== 'string') { if (typeof Call !== 'undefined') Call.onFrame(e.data); return; } let m; try { m = JSON.parse(e.data); } catch { return; } chain = chain.then(() => handle(m)).catch(err => console.error(err)); };
   ws.onerror = () => { if (!st.me) { gateLog('[-] link failed', 'bad'); setBusy(false); $('#loginErr').textContent = tr('Cannot reach the server.'); } };
   ws.onclose = () => {
+    if (st.ws === ws && typeof Call !== 'undefined') Call.lost();
     if (st.ws !== ws) return;
     if (!st.me) { endResume(tr('Could not resume your session. Please sign in again.')); setBusy(false); return; }
     st.retry++; const delay = Math.min(1000 * st.retry, 6000); let left = Math.ceil(delay / 1000);
@@ -224,6 +226,7 @@ async function handle(m) {
       } else { local(tr(m.text), true); toast(tr(m.text), 'bad'); }
       break;
   }
+  if (typeof Call !== 'undefined' && (m.t === 'incoming' || m.t === 'callstate')) Call.onMsg(m);
   if (typeof Social !== 'undefined' && /^(prefs|profile|notif|results|feed|post|plike|pdel|group|gleave|gresults)$/.test(m.t)) Social.onMsg(m);
   emitUI('state');
 }
@@ -284,7 +287,7 @@ const myRole = room => ((((st.groups[room.slice(2)] || {}).members) || []).find(
 const canMod = room => room.startsWith('g:') ? ['owner', 'mod'].includes(myRole(room)) : !!st.admin;
 const isBlocked = n => st.prefs.blocked.includes(String(n).toLowerCase());
 const isMuted = k => st.prefs.muted.includes(String(k).toLowerCase());
-function notifText(n) { const t = { follow: tr('started following you'), like: tr('liked your post'), react: tr('reacted {text}', { text: n.text }), reply: tr('replied: {text}', { text: n.text }), mention: tr('mentioned you: {text}', { text: n.text }), invite: (/^added you to (.+)$/.exec(n.text || '') ? tr('added you to {name}', { name: /^added you to (.+)$/.exec(n.text)[1] }) : n.text) }[n.type]; return n.from + ' ' + (t || n.text || ''); }
+function notifText(n) { const t = { follow: tr('started following you'), like: tr('liked your post'), react: tr('reacted {text}', { text: n.text }), reply: tr('replied: {text}', { text: n.text }), mention: tr('mentioned you: {text}', { text: n.text }), missed: tr('missed call'), invite: (/^added you to (.+)$/.exec(n.text || '') ? tr('added you to {name}', { name: /^added you to (.+)$/.exec(n.text)[1] }) : n.text) }[n.type]; return n.from + ' ' + (t || n.text || ''); }
 function rowActions(m) {
   const box = el('span', 'ra'), add = (txt, label, fn) => { const b = el('button', 'ra-b', txt); b.type = 'button'; b.setAttribute('aria-label', label); b.title = label; b.onclick = e => { e.stopPropagation(); fn(b); }; box.append(b); };
   add('\u21A9', tr('Reply'), () => startReply(m)); add('\u263A', tr('React'), b => reactPicker(m, b));
@@ -400,7 +403,7 @@ function renderFiles() {
   });
 }
 $('#ffind').addEventListener('input', renderFiles);
-function renderAll() { renderRooms(); renderUsers(); renderFiles(); renderLog(); renderPins(); updMute(); tabBadges(); }
+function renderAll() { renderRooms(); renderUsers(); renderFiles(); renderLog(); renderPins(); updMute(); if (typeof Call !== 'undefined') Call.btn(); tabBadges(); }
 function open(k, id) { st.cur = { k, id }; delete st.unread[k === 'b' ? 'b:board' : key(st.cur)]; $('#find').value = ''; st.reply = null; st.editing = null; renderReplyBar(); renderAll(); markRead(); updateTitle(); setTab('chat'); if (!$('#form').hidden && !matchMedia('(pointer:coarse)').matches) $('#inp').focus(); }
 
 /* ---------- input & commands ---------- */

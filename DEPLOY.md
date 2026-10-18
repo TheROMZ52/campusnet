@@ -25,8 +25,11 @@ Upload the zip (or point the platform at the repository). Start file: `server.js
 | `TRUST_PROXY=1` | Set when the platform puts a reverse proxy in front (almost always). Needed to see real client addresses for rate limits. Only safe if the proxy overwrites `X-Forwarded-For`. |
 | `ADMIN_USERS`, `ADMIN_CODE` | Names that may only be registered with the code, and the code. Set both. |
 | `ACCESS_CODE` | Optional code every new user must enter. Set it on a public server. |
+| `CALL_RING_MS` | How long a call rings before it counts as missed (default 45000). |
 | `SITE_NAME` | Name shown in the UI. |
 | `MAX_STORAGE_MB`, `MAX_USER_MB`, `MAX_FILE_MB` | Upload limits. Keep `MAX_STORAGE_MB` below the real disk size. |
+
+Voice calls relay audio through the server (about 16 KB/s per active call), so they use bandwidth but need no extra ports.
 
 ## 4. First-run checklist
 1. Open the site over `https://`. The sign-in page should load.

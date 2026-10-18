@@ -27,6 +27,13 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Voice calls (v0.12)
+Open a direct message with someone who is online and press **[Call]** in the conversation header. They get an incoming-call box (ring, Accept / Decline); during the call you can mute and end it. One call at a time per person; a missed call leaves an alert.
+- **How it works:** signaling and audio both travel over the existing WebSocket and the server only relays. It needs no UDP ports, STUN or TURN, so it works on any host that supports WebSocket, including a domestic-only network. The trade-off is quality and delay: voice is **8 kHz telephone quality** (about 8 KB/s each way), and delay is typically a few hundred milliseconds because audio goes through the server over TCP.
+- **Privacy:** every audio frame is encrypted in the browser with AES-256-GCM using the same pairwise key as direct messages (a fresh nonce per call and direction), so the server relays ciphertext only. The server does see who calls whom, when and for how long (it keeps no call history except the missed-call alert). A call cannot start while your encryption key is locked (after a reload, enter your password first) or if the contact's safety number changed.
+- **Limits:** one-to-one only (no group calls), needs HTTPS or localhost and a microphone permission, headphones recommended (echo cancellation depends on the device), and audio may stop when the browser suspends a background tab or the phone screen is off. Not available in `?demo` mode.
+- **Capacity:** a call costs the server about 16 KB/s while active (both directions). Settings: `CALL_RING_MS` (ring time, default 45000).
+
 ## Persian (v0.10)
 The whole interface is available in Persian (فارسی) and English. The language follows your browser the first time; change it with the button on the sign-in screen or in Settings > Language (the page reloads and your session continues). In Persian the content of windows and chat is right-to-left with the Vazirmatn font (served from `public/fonts/`, SIL Open Font License, see `Vazirmatn-OFL.txt`), messages use automatic text direction so mixed Persian/English lines read correctly, and dates use the Persian calendar. The window frame (title bars, launcher, taskbar) keeps its left-to-right layout. The terminal intentionally keeps English commands and output.
 
@@ -128,7 +135,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (58, no browser). `npm run test:e2e` (24 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (65, no browser). `npm run test:e2e` (28 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

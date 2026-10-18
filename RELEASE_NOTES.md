@@ -1,5 +1,15 @@
 # Release notes
 
+## v0.12.0 - voice calls
+- One-to-one voice calls from the header of a direct message: ring, Accept / Decline, mute, end, call timer, missed-call alert. Works over the existing WebSocket (no UDP, STUN or TURN), so it runs on any host with WebSocket support
+- 8 kHz telephone-quality voice (about 8 KB/s each way) captured and played with AudioWorklet processors and a small jitter buffer (`public/call-worklet.js`)
+- Every audio frame is encrypted in the browser (AES-256-GCM, the pairwise DM key, per-call nonce and direction, replay protection by sequence number); the server relays ciphertext only. Calls refuse to start if the key is locked or the contact's key changed
+- Server: `call`, `callans`, `callend` signaling, `incoming` / `callstate` events, binary relay with size, rate (80 frames/s) and backpressure limits, cleanup on disconnect, `CALL_RING_MS`. `Permissions-Policy` now allows the microphone for the app itself
+- Fixed while testing: calling a user whose connection had dropped rang for 45 s instead of reporting "offline"
+- Persian translations for all call texts. The browser E2E suite now runs two test files at a time (`--test-concurrency=2`) to avoid timing flakiness
+- Tests: `npm test` 65 (7 new for signaling and relay), `npm run test:e2e` 28 (4 new with a fake microphone: encrypted audio flows both ways and is played, mute stops frames, decline/cancel/offline, locked key refuses to call)
+- Not done: group calls, Opus codec (higher quality at lower bandwidth), reconnecting a call after a network drop, testing on real phones, networks and echo conditions
+
 ## v0.11.0 - deployment that works offline
 - **No runtime dependencies to install:** `ws` is vendored in `vendor/ws` (MIT, version in its package.json) and `package.json` has an empty `dependencies`. A host that runs `npm install` on every start no longer needs the npm registry
 - `npm run pack` builds `dist/campusnet-<version>.zip` (about 250 KB, files at the root, start file `server.js`) with a built-in zip writer, no external tools. Tests, data, CI files and `node_modules` are left out
