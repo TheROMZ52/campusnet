@@ -76,6 +76,8 @@ Open `public/index.html?demo` in a browser (double-click works, or use the GitHu
 npm install
 npm start
 ```
+
+`npm start` runs `scripts/start.js`: it loads `.env` (on a personal machine it creates it from `.env.example` the first time) and turns on HTTPS with a self-signed certificate so encrypted messages and calls work on a LAN. On a hosting platform (`PORT` or `TRUST_PROXY` already set, or `NODE_ENV=production`) it stays on plain HTTP behind the platform's proxy and works without any `.env`; real environment variables always win over the file. `node server.js` reads no `.env` and never forces HTTPS.
 The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone on the same network opens it. If they cannot connect, allow Node.js through your firewall (port 3000).
 
 ## Settings (environment variables)
@@ -88,7 +90,7 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 | `ADMIN_CODE` | none | `/admin <code>` makes a signed-in user admin for the session |
 | `HTTPS` | off | Set to `1` to serve HTTPS with an auto-created self-signed certificate (needs openssl) |
 | `TLS_CERT`, `TLS_KEY` | none | Paths to your own certificate and key |
-| `TRUST_PROXY` | off | Set to `1` behind a reverse proxy so login throttling sees real IPs |
+| `TRUST_PROXY` | off | Number of reverse proxies in front of the server (`1` = one). The client address is the entry that many places from the end of `X-Forwarded-For`, so entries a client forged on the left are ignored; set `2` behind two proxies (for example a CDN plus the platform) |
 | `MAX_FILE_MB` | `100` | Max size per file |
 | `MAX_STORAGE_MB` | `2000` | Max total upload storage |
 | `DATA_DIR` | `./data` | Where chat history and uploads are kept |
@@ -135,7 +137,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (65, no browser). `npm run test:e2e` (28 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (78, no browser). `npm run test:e2e` (32 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |

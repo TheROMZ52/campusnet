@@ -1,5 +1,18 @@
 # Release notes
 
+## v0.12.1 - debugging pass
+Found with static analysis (ESLint), a protocol fuzzer (about 25 000 hostile messages), an HTTP path/method/range probe and small-screen layout checks. Every fix below has a test that fails without it.
+- **Security: rate limits could be bypassed behind a proxy.** `TRUST_PROXY` used the *first* `X-Forwarded-For` entry, which a client can forge, so the per-address limits on sign-ups and logins could be sidestepped. It now counts trusted proxies from the end of the header (`TRUST_PROXY=1` one proxy, `2` two). See DEPLOY.md
+- **`npm start` (your change) made safe for hosting.** It now runs `scripts/start.js`: same behaviour on a personal machine (creates and loads `.env`, HTTPS with a self-signed certificate), but on a host (`PORT`/`TRUST_PROXY` set, or `NODE_ENV=production`) it stays on plain HTTP behind the platform proxy. Before, from the deployment zip it crashed with `.env: not found`, and with a platform-provided `PORT` it served HTTPS where the proxy expects HTTP. `.env.example` and `scripts/start.js` are in the zip
+- **Calls:** signing in again with the same name, or resuming the session with its token, during a call left the other person in a call that could never carry audio; it now ends with "disconnect"
+- **Hostile values:** objects without `toString` in message fields made handlers throw (`gkick`, `gleave` and others logged errors); all string coercion of client data now goes through one safe helper
+- **Layout:** the top bar pushed the page sideways on narrow screens (Persian at 390 px by 11 px, English at 320 px by 65 px); it now shrinks. A layout test checks 10 apps at 320/390 px in both languages
+- **Profile photo race:** pressing Save right after choosing a photo could send the profile without the photo (the photo is resized asynchronously); Save now waits for it. Found because a browser test failed under load
+- Cleanup: duplicate translation key removed
+- Checked and fine: no path traversal or hidden-file exposure over HTTP, uploads are stored under random ids, odd byte ranges and methods are handled, no undefined variables or cross-file redeclarations in the client, the server stayed up under the fuzzer with no error logged
+- Tests: `npm test` 78 (13 new), `npm run test:e2e` 32 (4 new)
+- Not fixed: three unused variables in client code (harmless)
+
 ## v0.12.0 - voice calls
 - One-to-one voice calls from the header of a direct message: ring, Accept / Decline, mute, end, call timer, missed-call alert. Works over the existing WebSocket (no UDP, STUN or TURN), so it runs on any host with WebSocket support
 - 8 kHz telephone-quality voice (about 8 KB/s each way) captured and played with AudioWorklet processors and a small jitter buffer (`public/call-worklet.js`)

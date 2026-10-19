@@ -552,3 +552,12 @@ html.fa .home ul.hl small{text-align:left}
 .callbox .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .callbox .btn.ok{border-color:var(--neon);color:var(--neon)}.callbox .btn.bad{color:var(--bad)}.callbox .btn.on{border-color:var(--warn);color:var(--warn)}
 html.fa .callbox{direction:rtl}
+
+/* v0.12.1: the top bar must never push the page sideways on narrow phones (Persian labels are wider) */
+#bar{min-width:0}
+#bar>*{min-width:0}
+#bar #outBtn{flex:none}
+#bar select{min-width:0;max-width:100%}
+#meBar{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:480px){#bar{gap:6px;padding-left:8px;padding-right:8px}#bar .chip{padding:0 8px;gap:6px}#bar .chip.me{flex:0 1 auto;max-width:34vw}#bar select{flex:0 1 96px}}
+@media (max-width:360px){#bar .chip:not(.me) #stat,#bar .chip:not(.me) span:not(.led){display:none}}

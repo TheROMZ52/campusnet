@@ -101,3 +101,31 @@ describe('voice calls: no answer', () => {
     a2.c.ws.close(); b2.c.ws.close(); await s2.stop();
   });
 });
+
+describe('voice calls: connections that go away or get replaced', () => {
+  let s; before(async () => { s = await startServer(); }); after(async () => { await s.stop(); });
+  it('caller drops while ringing: the callee is told and neither person is stuck "busy"', async () => {
+    const a = await reg(s, 'amy'), b = await reg(s, 'ben');
+    a.c.send({ t: 'call', to: 'ben', nonce: NONCE }); await b.c.wait(x => x.t === 'incoming'); a.c.ws.terminate();
+    await b.c.wait(x => x.t === 'callstate' && x.state === 'ended' && x.reason === 'disconnect'); await sleep(100);
+    const a2 = await signin(s, 'amy', PW); b.c.send({ t: 'call', to: 'amy', nonce: NONCE }); await a2.c.wait(x => x.t === 'incoming');   // ben can call again: nobody is stuck
+    a2.c.send({ t: 'callans', id: (await a2.c.wait(x => x.t === 'incoming')).id, accept: false }); await b.c.wait(x => x.reason === 'declined'); a2.c.ws.close(); b.c.ws.close();
+  });
+  it('callee drops while ringing: the caller is told', async () => {
+    const a = await reg(s, 'cat'), b = await reg(s, 'dan');
+    a.c.send({ t: 'call', to: 'dan', nonce: NONCE }); await b.c.wait(x => x.t === 'incoming'); b.c.ws.terminate();
+    await a.c.wait(x => x.t === 'callstate' && x.state === 'ended' && x.reason === 'disconnect'); a.c.ws.close();
+  });
+  it('signing in again with the same name during a call ends the old call for the other person', async () => {
+    const a = await reg(s, 'eve'), b = await reg(s, 'fay');
+    a.c.send({ t: 'call', to: 'fay', nonce: NONCE }); const inc = await b.c.wait(x => x.t === 'incoming'); b.c.send({ t: 'callans', id: inc.id, accept: true }); await a.c.wait(x => x.state === 'accepted');
+    const a2 = await signin(s, 'eve', PW);
+    await b.c.wait(x => x.t === 'callstate' && x.state === 'ended' && x.reason === 'disconnect'); a.c.ws.close(); a2.c.ws.close(); b.c.ws.close();
+  });
+  it('resuming the session with its token (a page reload racing the old socket) ends the call too', async () => {
+    const a = await reg(s, 'gus'), b = await reg(s, 'hal');
+    a.c.send({ t: 'call', to: 'hal', nonce: NONCE }); const inc = await b.c.wait(x => x.t === 'incoming'); b.c.send({ t: 'callans', id: inc.id, accept: true }); await a.c.wait(x => x.state === 'accepted');
+    const c2 = client(s.port); await c2.ready; c2.send({ t: 'join', name: 'gus', token: a.token }); await c2.wait(x => x.t === 'welcome');
+    await b.c.wait(x => x.t === 'callstate' && x.state === 'ended' && x.reason === 'disconnect'); a.c.ws.close(); c2.ws.close(); b.c.ws.close();
+  });
+});

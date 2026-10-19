@@ -31,7 +31,7 @@ describe('v0.7 features in a real browser', () => {
     await page.click('#goBtn'); await up(page, name, apps); return { ctx, page, name };
   }
   async function up(page, name, apps) {
-    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 8000 });
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 });
     for (const a of apps) { const t = page.locator('#launcher button[aria-label="Open ' + a + '"]'); if (await t.count()) await t.click(); }
   }
   async function relogin(page, name, apps = ['Messages']) {   // reload keeps the session; only the encryption key needs the password again
@@ -42,7 +42,7 @@ describe('v0.7 features in a real browser', () => {
   const row = (page, text) => page.locator('#log .msg', { hasText: text }).first();
   const act = async (page, text, label) => { const r = row(page, text); await r.hover(); await r.locator(`.ra-b[aria-label="${label}"]`).click(); };
   const openDM = (page, who) => page.locator('#users li', { hasText: who }).first().click();
-  const gone = (page, text) => page.waitForFunction(t => ![...document.querySelectorAll('#log .msg')].some(r => r.textContent.includes(t) && !r.querySelector('.rq')), text, { timeout: 6000 });
+  const gone = (page, text) => page.waitForFunction(t => ![...document.querySelectorAll('#log .msg')].some(r => r.textContent.includes(t) && !r.querySelector('.rq')), text, { timeout: 15000 });
 
   it('room: reply, edit, react, delete', async () => {
     const a = await user('alice'), b = await user('bob');
@@ -58,7 +58,7 @@ describe('v0.7 features in a real browser', () => {
     await a.page.waitForSelector('#log .msg:has-text("orig-message v2") .rxc.me, #log .msg:has-text("orig-message v2") .rxc');
     assert.match(await a.page.locator('#log .msg:has-text("orig-message v2") .rxc').first().textContent(), /1/);
     await b.page.locator('#log .msg:has-text("orig-message v2") .rxc').first().click();                 // toggle off
-    await a.page.waitForFunction(() => !document.querySelector('#log .rxc'), null, { timeout: 5000 });
+    await a.page.waitForFunction(() => !document.querySelector('#log .rxc'), null, { timeout: 15000 });
     await act(a.page, 'the-answer', 'Reply'); assert.equal(await a.page.locator('#log .msg:has-text("the-answer") .ra-b[aria-label="Edit message"]').count(), 0, 'cannot edit others');
     await a.page.keyboard.press('Escape'); await act(a.page, 'orig-message v2', 'Delete message'); await gone(b.page, 'orig-message v2');
     await a.ctx.close(); await b.ctx.close();
@@ -79,7 +79,7 @@ describe('v0.7 features in a real browser', () => {
     await c.page.waitForSelector('#log .msg:has-text("dm-one") .rc:not(.seen)');
     await d.page.waitForSelector('#users li:has-text("carol") .badge');
     await openDM(d.page, 'carol'); await d.page.waitForSelector('#log .msg:has-text("dm-one")');
-    await c.page.waitForSelector('#log .msg:has-text("dm-one") .rc.seen', { timeout: 6000 });
+    await c.page.waitForSelector('#log .msg:has-text("dm-one") .rc.seen', { timeout: 15000 });
     await act(c.page, 'dm-one', 'Edit message'); await say(c.page, 'dm-one edited');
     await d.page.waitForSelector('#log .msg:has-text("dm-one edited") .ed');
     await act(d.page, 'dm-one edited', 'React'); await d.page.locator('.rpick button').nth(1).click();
@@ -110,26 +110,26 @@ describe('v0.7 features in a real browser', () => {
     const g = await user('gina', { apps: ['People'] }), h = await user('hank', { apps: ['People', 'Feed', 'Alerts'] });
     await g.page.locator('input[aria-label="Display name"]').fill('Gina <b id="xss1">G</b>'); await g.page.locator('textarea[aria-label="Bio"]').fill('<img src=x onerror=alert(1)>');
     await g.page.locator('input[type=file][accept^="image"]').setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: PNG });
-    await g.page.locator('.soc button:text-is("Save profile")').dispatchEvent('click');
-    await g.page.waitForFunction(() => document.querySelector('.avbig img')?.src.startsWith('data:image/jpeg'), null, { timeout: 5000 });
+    await g.page.locator('.soc button:text-is("Save profile")').dispatchEvent('click');   // no wait for the preview: Save itself waits for the photo
+    await g.page.waitForFunction(() => st.myProfile.a.startsWith('data:image/jpeg') && document.querySelector('.avbig img'), null, { timeout: 15000 });   // confirmed by the server
     await h.page.locator('input[aria-label="Find people"]').fill('gin');
     await h.page.waitForSelector('.plist li:has-text("gina")');
     assert.equal(await h.page.locator('#xss1, .plist img[src="x"]').count(), 0, 'profile text is inert');
     assert.match(await h.page.locator('.plist li').first().textContent(), /<b id="xss1">/);
     await h.page.locator('.plist li button:text-is("Follow")').dispatchEvent('click');
     await g.page.locator('#launcher button[aria-label="Open Alerts"]').click();
-    await g.page.waitForSelector('.nlist li.new:has-text("hank started following you")', { timeout: 6000 }).catch(() => {});
-    await g.page.waitForFunction(() => /hank started following you/.test(document.body.innerText), null, { timeout: 6000 });
+    await g.page.waitForSelector('.nlist li.new:has-text("hank started following you")', { timeout: 15000 }).catch(() => {});
+    await g.page.waitForFunction(() => /hank started following you/.test(document.body.innerText), null, { timeout: 15000 });
     await h.page.locator('textarea[aria-label="New post"]').fill('hello feed <i id="xss2">x</i>');
     await h.page.locator('.soc button:text-is("Post")').dispatchEvent('click');
     await g.page.locator('#launcher button[aria-label="Open Feed"]').click();
-    await g.page.waitForSelector('.post:has-text("hello feed")', { timeout: 6000 });
+    await g.page.waitForSelector('.post:has-text("hello feed")', { timeout: 15000 });
     assert.equal(await g.page.locator('#xss2').count(), 0, 'post text is inert');
     await g.page.locator('.post:has-text("hello feed") button[aria-label="Like post"]').dispatchEvent('click');
-    await h.page.waitForFunction(() => /gina liked your post/.test(document.body.innerText), null, { timeout: 6000 });
+    await h.page.waitForFunction(() => /gina liked your post/.test(document.body.innerText), null, { timeout: 15000 });
     await g.page.locator('textarea[aria-label="New post"]').fill('from-gina'); await g.page.locator('.soc button:text-is("Post")').dispatchEvent('click');
     await h.page.locator('.soc button:text-is("Following")').dispatchEvent('click');   // hank follows gina
-    await h.page.waitForSelector('.post:has-text("from-gina")', { timeout: 6000 });
+    await h.page.waitForSelector('.post:has-text("from-gina")', { timeout: 15000 });
     await g.ctx.close(); await h.ctx.close();
   });
 

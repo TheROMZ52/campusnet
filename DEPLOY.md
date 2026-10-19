@@ -16,13 +16,13 @@ npm run pack
 This writes `dist/campusnet-<version>.zip` (about 250 KB). Files are at the zip root and `server.js` is the start file. You do not need Node to be installed on your machine to unzip it, and the server needs no `npm install`.
 
 ## 3. Upload and configure
-Upload the zip (or point the platform at the repository). Start file: `server.js`. Leave "extra packages" and "build command" empty.
+Upload the zip (or point the platform at the repository). Start file: `server.js` (or the npm script `start`: on a platform it stays on plain HTTP and needs no `.env`). Leave "extra packages" and "build command" empty.
 
 | Variable | Meaning |
 |---|---|
 | `PORT` | Set by most platforms. The server must listen on it (it does). |
 | `DATA_DIR` | **Set this to a persistent path.** Accounts, messages and uploaded files live here. If it points inside the app folder and the platform replaces that folder on each start, everything is lost. |
-| `TRUST_PROXY=1` | Set when the platform puts a reverse proxy in front (almost always). Needed to see real client addresses for rate limits. Only safe if the proxy overwrites `X-Forwarded-For`. |
+| `TRUST_PROXY=1` | Number of trusted reverse proxies in front of the app (`1` = one; almost every platform has one). The client address is read that many places from the end of `X-Forwarded-For`, so forged leading entries are ignored. Use `2` behind two proxies (CDN + platform); too low a number makes users look like they share an address, too high ignores the header. |
 | `ADMIN_USERS`, `ADMIN_CODE` | Names that may only be registered with the code, and the code. Set both. |
 | `ACCESS_CODE` | Optional code every new user must enter. Set it on a public server. |
 | `CALL_RING_MS` | How long a call rings before it counts as missed (default 45000). |

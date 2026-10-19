@@ -28,7 +28,11 @@ const SESSION_MS = num('SESSION_HOURS', 168) * 3600e3;       // absolute session
 const IDLE_MS = num('SESSION_IDLE_HOURS', 24, 0.0001) * 3600e3;       // inactivity timeout
 const JOIN_TIMEOUT = num('JOIN_TIMEOUT_MS', 15000, 100);
 const MAX_CONN_IP = num('MAX_CONNECTIONS_PER_IP', 20, 1);
-const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+/* TRUST_PROXY = number of trusted reverse proxies in front of the server ('1' or 'true' = one). The client address is the entry that many places from the END of
+   X-Forwarded-For (the proxy appends the address it saw); entries further left can be forged by the client and are ignored. */
+const TRUST_HOPS = (() => { const v = String(process.env.TRUST_PROXY || '').toLowerCase(); if (!v || v === '0' || v === 'false') return 0; const n = parseInt(v, 10); return Number.isInteger(n) && n > 0 ? Math.min(n, 5) : 1; })();
+const TRUST_PROXY = TRUST_HOPS > 0;
+const clientIp = req => { if (TRUST_HOPS) { const parts = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean), ip = parts[parts.length - TRUST_HOPS]; if (ip) return ip.slice(0, 64); } return req.socket.remoteAddress || '?'; };
 if (ADMIN_USERS.length && !ADMIN) bail('ADMIN_USERS requires ADMIN_CODE (an admin name can only be registered with that code, so nobody can claim it first).');
 const ROOMS = ['general', 'random', 'help'];
 const RESERVED = new Set(['system', 'admin', 'administrator', 'root', 'server', 'campusnet', 'moderator', 'mod', 'null', 'undefined']);
@@ -95,7 +99,8 @@ const persistDms = () => save('dms.json', Object.fromEntries(dms));   // ciphert
 const REACTS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 const posts = (rd('posts.json', []) || []).filter(p => p && typeof p.id === 'string' && typeof p.by === 'string' && typeof p.text === 'string' && Array.isArray(p.likes));
 const notifs = Object.assign(Object.create(null), rd('notifs.json', {}));
-const ukey = n => String(n).toLowerCase();
+const sstr = v => (typeof v === 'string' || typeof v === 'number') ? String(v) : '';   // client data can be any JSON value, never call String() on an object
+const ukey = n => sstr(n).toLowerCase();
 const urec = n => (typeof n === 'string' && n) ? users[ukey(n)] : undefined;
 const line = (t, n) => clean(t).replace(/\s+/g, ' ').slice(0, n);
 const snippet = t => line(t, 80);
@@ -166,10 +171,10 @@ function strike(k, limit, ms) { const now = Date.now(); let f = fails.get(k); if
 const sessions = new Map();   // token -> { token, name, admin, status, created, seen, ws }
 const dmKey = (a, b) => [a.toLowerCase(), b.toLowerCase()].sort().join('|');
 const online = () => [...sessions.values()].filter(s => s.ws && s.ws.readyState === 1);
-const findByName = n => [...sessions.values()].find(s => s.name.toLowerCase() === String(n).toLowerCase());
+const findByName = n => [...sessions.values()].find(s => s.name.toLowerCase() === sstr(n).toLowerCase());
 const uid = () => crypto.randomBytes(6).toString('hex');
 const safeEq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
-const clean = t => String(t || '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim().slice(0, 1000);
+const clean = t => sstr(t).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim().slice(0, 1000);
 const fmt = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 const bcast = o => online().forEach(s => send(s.ws, o));
@@ -321,11 +326,11 @@ async function join(ws, m) {
 }
 async function doJoin(ws, m) {
   const fail = (text, extra) => send(ws, { t: 'err', fatal: true, text, ...extra });
-  if (CODE) { if (blocked(ws.ip)) return fail('Too many attempts. Wait a minute.'); if (!safeEq(String(m.code || ''), CODE)) { strike(ws.ip, 30, 120000); return fail('Wrong access code.'); } }
+  if (CODE) { if (blocked(ws.ip)) return fail('Too many attempts. Wait a minute.'); if (!safeEq(sstr(m.code), CODE)) { strike(ws.ip, 30, 120000); return fail('Wrong access code.'); } }
   let s = authToken(m.token);
-  if (s) { if (s.ws && s.ws !== ws) { const old = s.ws; s.ws = null; old.s = null; try { old.close(); } catch { /* ignore */ } } }
+  if (s) { if (s.ws && s.ws !== ws) { endCallOf(s.name, 'disconnect'); const old = s.ws; s.ws = null; old.s = null; try { old.close(); } catch { /* ignore */ } } }
   else {
-    const name = String(m.name || '').trim(), pw = String(m.password || ''), key = name.toLowerCase(), fk = ws.ip + '|' + key;
+    const name = sstr(m.name).trim(), pw = sstr(m.password), key = name.toLowerCase(), fk = ws.ip + '|' + key;
     if (!NAME_RE.test(name)) return fail('Name must be 2-20 letters, digits, _ . or -');
     if (pw.length > 128) return fail('Password too long.');
     if (blocked(fk) || blocked(ws.ip)) return fail('Too many attempts. Wait a minute.');
@@ -339,7 +344,7 @@ async function doJoin(ws, m) {
       if (m.mode === 'login') { await hashPw(pw, DUMMY_SALT, 2); strike(fk, 5, 60000); strike(ws.ip, 30, 120000); return fail('Invalid username or password.'); }   // same cost and message as a wrong password
       if (blocked('reg|' + ws.ip)) return fail('Too many accounts created from this address. Try later.');
       if (RESERVED.has(key)) return fail('That name is reserved.');
-      if (ADMIN_USERS.includes(key) && !(ADMIN && safeEq(String(m.adminCode || ''), ADMIN))) return fail('This name is reserved for an administrator. Enter the admin code.', { need: 'adminCode' });
+      if (ADMIN_USERS.includes(key) && !(ADMIN && safeEq(sstr(m.adminCode), ADMIN))) return fail('This name is reserved for an administrator. Enter the admin code.', { need: 'adminCode' });
       if (pw.length < 8) return fail('Choose a password of at least 8 characters.');
       if (WEAK.has(pw.toLowerCase()) || pw.toLowerCase() === key) return fail('That password is too easy to guess.');
       const salt = crypto.randomBytes(16).toString('hex');
@@ -347,7 +352,7 @@ async function doJoin(ws, m) {
     }
     fails.delete(fk);
     const clash = findByName(u.name);
-    if (clash) { const old = clash.ws; sessions.delete(clash.token); if (old) { old.s = null; try { old.close(); } catch { /* ignore */ } } }
+    if (clash) { endCallOf(clash.name, 'disconnect'); const old = clash.ws; sessions.delete(clash.token); if (old) { old.s = null; try { old.close(); } catch { /* ignore */ } } }
     const now = Date.now(); s = { token: crypto.randomBytes(16).toString('hex'), name: u.name, admin: ADMIN_USERS.includes(key), status: 'online', created: now, seen: now, ws: null };
     sessions.set(s.token, s);
   }
@@ -381,7 +386,7 @@ function onMessage(ws, m) {
     }
   } else if (m.t === 'dm') {
     const rec = str(m.to) ? users[m.to.toLowerCase()] : null, e = m.enc;
-    if (!rec) return send(ws, { t: 'err', text: `No user named "${String(m.to).slice(0, 20)}".` });
+    if (!rec) return send(ws, { t: 'err', text: `No user named "${sstr(m.to).slice(0, 20)}".` });
     if (blocksEither(s.name, rec.name)) return send(ws, { t: 'err', text: 'This message could not be delivered.' });
     if (!e || !str(e.iv) || !str(e.ct) || e.iv.length > 32 || e.ct.length > 6000 || !e.ct.length) return send(ws, { t: 'err', text: 'Direct messages must be end-to-end encrypted.' });
     const to = findByName(rec.name);
@@ -401,7 +406,7 @@ function onMessage(ws, m) {
     bcast({ t: 'files', files: publicFiles() });
   } else if (m.t === 'admin') {
     const k = 'adm|' + s.name; if (blocked(k)) return send(ws, { t: 'err', text: 'Too many attempts. Wait a few minutes.' });
-    if (ADMIN && safeEq(String(m.code || ''), ADMIN)) { s.admin = true; send(ws, { t: 'admin', ok: true }); log('INFO', `${s.name} enabled admin mode`); }
+    if (ADMIN && safeEq(sstr(m.code), ADMIN)) { s.admin = true; send(ws, { t: 'admin', ok: true }); log('INFO', `${s.name} enabled admin mode`); }
     else { strike(k, 5, 300000); send(ws, { t: 'err', text: 'Admin is not enabled or the code is wrong.' }); }
   } else if (m.t === 'status') {
     if (['online', 'away', 'busy'].includes(m.status)) { s.status = m.status; pushUsers(); }
@@ -492,7 +497,7 @@ function onMessage(ws, m) {
   } else if (m.t === 'callend') {
     const c = calls.get(m.id); if (!c || ukey(c.a) !== ukey(s.name) && ukey(c.b) !== ukey(s.name)) return; endCall(c.id, c.state === 'ringing' && ukey(c.a) === ukey(s.name) ? 'cancelled' : 'ended');
   } else if (m.t === 'ping') {
-    send(ws, { t: 'pong', id: String(m.id || '').slice(0, 32) });
+    send(ws, { t: 'pong', id: sstr(m.id).slice(0, 32) });
   } else if (m.t === 'gcreate') {
     const name = line(m.name, 40); if (!name) return;
     if (Object.values(groups).filter(g => g.owner === ukey(s.name)).length >= 10) return send(ws, { t: 'err', text: 'You can own at most 10 groups.' });
@@ -500,7 +505,7 @@ function onMessage(ws, m) {
     const g = groups[id] = { id, name, desc: line(m.desc, 200), pub: !!m.pub, owner: ukey(s.name), members: { [ukey(s.name)]: 'owner' }, created: Date.now(), hist: [] };
     save('groups.json', groups); pushGroup(g);
   } else if (m.t === 'gjoin' || m.t === 'ginvite') {
-    const g = groups[String(m.id)]; if (!g) return;
+    const g = groups[sstr(m.id)]; if (!g) return;
     const who = m.t === 'gjoin' ? urec(s.name) : urec(m.name);
     if (!who || roleOf(g, who.name) || Object.keys(g.members).length >= 200) return;
     if (m.t === 'gjoin' ? !g.pub : (!['owner', 'mod'].includes(roleOf(g, s.name)) || blocksEither(s.name, who.name))) return send(ws, { t: 'err', text: m.t === 'gjoin' ? 'This group is invite-only.' : 'You cannot invite this user.' });
@@ -508,14 +513,14 @@ function onMessage(ws, m) {
     addRoomMsg('g:' + g.id, 'system', who.name + (m.t === 'gjoin' ? ' joined' : ' was invited by ' + s.name), 'sys');
     if (m.t === 'ginvite') notify(who.name, { type: 'invite', from: s.name, text: 'added you to ' + g.name, conv: 'r:g:' + g.id });
   } else if (m.t === 'gkick' || m.t === 'grole' || m.t === 'gleave') {
-    const g = groups[String(m.id)], me = roleOf(g, s.name); if (!g || !me) return;
+    const g = groups[sstr(m.id)], me = roleOf(g, s.name); if (!g || !me) return;
     const tg = m.t === 'gleave' ? urec(s.name) : urec(m.name), tr = tg && roleOf(g, tg.name); if (!tg || !tr || tr === 'owner') return;
     if (m.t === 'grole') { if (me !== 'owner' || !['mod', 'member'].includes(m.role)) return; g.members[ukey(tg.name)] = m.role; save('groups.json', groups); return pushGroup(g); }
     if (m.t === 'gkick' && !(me === 'owner' || (me === 'mod' && tr === 'member'))) return send(ws, { t: 'err', text: 'You do not have permission to remove this member.' });
     delete g.members[ukey(tg.name)]; save('groups.json', groups); toUser(tg.name, { t: 'gleave', id: g.id });
     addRoomMsg('g:' + g.id, 'system', tg.name + (m.t === 'gleave' ? ' left' : ' was removed by ' + s.name), 'sys'); pushGroup(g);
   } else if (m.t === 'gedit' || m.t === 'gdelete') {
-    const g = groups[String(m.id)]; if (!g || g.owner !== ukey(s.name)) return;
+    const g = groups[sstr(m.id)]; if (!g || g.owner !== ukey(s.name)) return;
     if (m.t === 'gedit') { g.name = line(m.name, 40) || g.name; g.desc = line(m.desc, 200); g.pub = !!m.pub; save('groups.json', groups); pushGroup(g); }
     else { Object.keys(g.members).forEach(k => { if (users[k]) toUser(users[k].name, { t: 'gleave', id: g.id }); }); delete groups[g.id]; save('groups.json', groups); }
   } else if (m.t === 'gsearch') {
@@ -530,7 +535,7 @@ function onMessage(ws, m) {
 }
 
 wss.on('connection', (ws, req) => {
-  ws.ip = (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '?';
+  ws.ip = clientIp(req);
   const c = (conns.get(ws.ip) || 0) + 1; conns.set(ws.ip, c);
   ws.on('close', () => { const n = (conns.get(ws.ip) || 1) - 1; if (n <= 0) conns.delete(ws.ip); else conns.set(ws.ip, n); });
   if (c > MAX_CONN_IP) { ws.close(1013, 'too many connections'); return; }
@@ -540,7 +545,7 @@ wss.on('connection', (ws, req) => {
     if (isBinary) return relayAudio(ws, raw);
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
-    try { onMessage(ws, m); } catch (e) { log('ERROR', `handler "${String(m.t).slice(0, 20)}" failed: ${e.stack || e.message}`); send(ws, { t: 'err', text: 'Server error.' }); }
+    try { onMessage(ws, m); } catch (e) { log('ERROR', `handler "${sstr(m.t).slice(0, 20)}" failed: ${e.stack || e.message}`); send(ws, { t: 'err', text: 'Server error.' }); }
   });
   ws.on('close', () => {
     clearTimeout(ws.joinTimer); const s = ws.s;

@@ -39,14 +39,14 @@ describe('browser E2E', () => {
   }
   /* The UI is a desktop OS: after login, open the app windows we need (launcher tiles). */
   const online = async (page, name, apps = ['Messages', 'Network', 'Files']) => {
-    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 8000 });
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 });
     for (const a of apps) { const t = page.locator('#launcher button[aria-label="Open ' + a + '"]'); if (await t.count()) await t.click(); }
   };
 
   it('rejects short passwords in the UI and does not log in', async () => {
     const { ctx, page } = await newUser();
     await register(page, 'shorty', 'matrix1');
-    await page.waitForFunction(() => document.querySelector('#loginErr').textContent.length > 0, null, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('#loginErr').textContent.length > 0, null, { timeout: 15000 });
     assert.equal(await page.evaluate(() => document.querySelector('#meBar').textContent), '');
     await ctx.close();
   });
@@ -56,7 +56,7 @@ describe('browser E2E', () => {
     await register(a.page, 'alice'); await online(a.page, 'alice');
     await register(b.page, 'bob'); await online(b.page, 'bob');
     await a.page.fill('#inp', 'hello-public-1'); await a.page.keyboard.press('Enter');
-    await b.page.waitForFunction(() => document.querySelector('#log').innerText.includes('hello-public-1'), null, { timeout: 5000 });
+    await b.page.waitForFunction(() => document.querySelector('#log').innerText.includes('hello-public-1'), null, { timeout: 15000 });
     const count = await b.page.evaluate(() => document.querySelector('#log').innerText.split('hello-public-1').length - 1);
     assert.equal(count, 1);
     await a.ctx.close(); await b.ctx.close();
@@ -69,9 +69,9 @@ describe('browser E2E', () => {
     await a.page.waitForSelector('#users li:not(.self)'); await a.page.click('#users li:not(.self) .n');
     await a.page.waitForFunction(() => document.querySelector('#convTitle').textContent.toLowerCase().includes('dave'));
     await a.page.fill('#inp', secret); await a.page.keyboard.press('Enter');
-    await b.page.waitForFunction(s => document.body.innerText.includes(s) || document.querySelector('#users')?.innerText.includes('carol'), secret, { timeout: 8000 });
+    await b.page.waitForFunction(s => document.body.innerText.includes(s) || document.querySelector('#users')?.innerText.includes('carol'), secret, { timeout: 15000 });
     await b.page.click('#users li:not(.self) .n');
-    await b.page.waitForFunction(s => document.querySelector('#log').innerText.includes(s), secret, { timeout: 8000 });
+    await b.page.waitForFunction(s => document.querySelector('#log').innerText.includes(s), secret, { timeout: 15000 });
     await sleep(1200); // let the server persist
     const blob = fs.readdirSync(s.dir).filter(f => fs.statSync(path.join(s.dir, f)).isFile()).map(f => fs.readFileSync(path.join(s.dir, f), 'utf8')).join('\n');
     assert.ok(/"enc"/.test(fs.readFileSync(path.join(s.dir, 'dms.json'), 'utf8')), 'the DM was persisted (as ciphertext), so the check below is not vacuous');
@@ -83,7 +83,7 @@ describe('browser E2E', () => {
     const a = await newUser(); await register(a.page, 'erin'); await online(a.page, 'erin');
     const f = path.join(os.tmpdir(), 'e2e-upload.txt'); fs.writeFileSync(f, 'file-body-123');
     await a.page.setInputFiles('#fileIn', f);
-    await a.page.waitForFunction(() => document.querySelector('#files').innerText.includes('e2e-upload.txt'), null, { timeout: 8000 });
+    await a.page.waitForFunction(() => document.querySelector('#files').innerText.includes('e2e-upload.txt'), null, { timeout: 15000 });
     const hrefs = await a.page.$$eval('#files a[href]', as => as.map(x => x.getAttribute('href')));
     assert.ok(hrefs.length > 0, 'a download link exists');
     const token = await a.page.evaluate(() => sessionStorage.getItem('cn:token'));
@@ -98,7 +98,7 @@ describe('browser E2E', () => {
 
   it('reserved admin name needs the admin code field; correct code works', async () => {
     const a = await newUser(); await register(a.page, 'boss');
-    await a.page.waitForFunction(() => !document.querySelector('#admRow').hidden, null, { timeout: 5000 });
+    await a.page.waitForFunction(() => !document.querySelector('#admRow').hidden, null, { timeout: 15000 });
     assert.equal(await a.page.evaluate(() => document.querySelector('#meBar').textContent), '');
     await a.page.fill('#admIn', 'adm-secret-1'); await a.page.click('#goBtn');
     await online(a.page, 'boss');

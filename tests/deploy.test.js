@@ -23,8 +23,8 @@ describe('deployment package', () => {
   const { zip } = build(); let names;
   it('has files at the zip root, includes the app and vendored ws, and leaves out tests, node_modules, data and CI', () => {
     names = unzip(zip, dir);
-    for (const must of ['server.js', 'package.json', 'public/index.html', 'public/fonts/Vazirmatn-Regular.woff2', 'vendor/ws/index.js', 'vendor/ws/LICENSE', 'DEPLOY.md', 'DEPLOY.fa.md']) assert.ok(names.includes(must), 'missing ' + must);
-    for (const bad of names) assert.ok(!/^(tests|node_modules|data|dist|\.github|scripts)\//.test(bad) && !bad.startsWith('.env'), 'must not ship ' + bad);
+    for (const must of ['server.js', 'package.json', 'public/index.html', 'public/fonts/Vazirmatn-Regular.woff2', 'vendor/ws/index.js', 'vendor/ws/LICENSE', 'DEPLOY.md', 'DEPLOY.fa.md', 'scripts/start.js', '.env.example']) assert.ok(names.includes(must), 'missing ' + must);
+    for (const bad of names) assert.ok(!/^(tests|node_modules|data|dist|\.github)\//.test(bad) && !/^scripts\/(?!start\.js$)/.test(bad) && bad !== '.env', 'must not ship ' + bad);
   });
   it('has no runtime dependencies, so a start never needs the npm registry', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); assert.deepEqual(pkg.dependencies || {}, {});

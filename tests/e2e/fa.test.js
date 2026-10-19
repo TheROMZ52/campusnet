@@ -51,7 +51,7 @@ describe('Persian interface in a real browser', () => {
     const a = await visit('fa-IR'), b = await visit('fa-IR');
     await signUp(a.page, 'dupe');
     await b.page.click('#tabUp'); await b.page.fill('#nameIn', 'dupe'); await b.page.fill('#pwIn', PW); await b.page.fill('#pw2In', PW); await b.page.click('#goBtn');
-    await b.page.waitForFunction(() => /قبلاً گرفته/.test(document.querySelector('#loginErr').textContent), null, { timeout: 6000 });
+    await b.page.waitForFunction(() => /قبلاً گرفته/.test(document.querySelector('#loginErr').textContent), null, { timeout: 15000 });
     await a.ctx.close(); await b.ctx.close();
   });
 

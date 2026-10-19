@@ -5,7 +5,7 @@
    CampusNet has no runtime dependencies to install (ws is vendored in vendor/ws). */
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const ROOT = path.join(__dirname, '..');
-const INCLUDE = ['server.js', 'package.json', 'package-lock.json', 'Dockerfile', 'README.md', 'RELEASE_NOTES.md', 'DEPLOY.md', 'DEPLOY.fa.md', 'vendor', 'public'];
+const INCLUDE = ['server.js', 'package.json', 'package-lock.json', 'Dockerfile', 'README.md', 'RELEASE_NOTES.md', 'DEPLOY.md', 'DEPLOY.fa.md', '.env.example', 'scripts/start.js', 'vendor', 'public'];
 const walk = rel => { const abs = path.join(ROOT, rel); if (!fs.existsSync(abs)) return []; const st = fs.statSync(abs); return st.isDirectory() ? fs.readdirSync(abs).sort().flatMap(n => walk(rel + '/' + n)) : [rel]; };
 const TABLE = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc32 = buf => { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };

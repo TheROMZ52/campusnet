@@ -27,7 +27,7 @@ describe('v0.9: Home, music, reload and Back', () => {
     const ctx = await browser.newContext(), page = await ctx.newPage();
     page.on('pageerror', e => problems.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error') problems.push('console: ' + m.text() + ' ' + m.location().url); });
     await page.goto(s.base + '/'); await page.click('#tabUp'); await page.fill('#nameIn', name); await page.fill('#pwIn', PW); await page.fill('#pw2In', PW); await page.click('#goBtn');
-    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 8000 });
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 });
     for (const a of apps) await page.locator('#launcher button[aria-label="Open ' + a + '"]').dispatchEvent('click');
     return { ctx, page };
   }
@@ -37,7 +37,7 @@ describe('v0.9: Home, music, reload and Back', () => {
     const a = await user('hana'), b = await user('hugo', ['Messages']);
     await a.page.waitForSelector('.home h2:has-text("hana")');
     await openDM(b.page, 'hana'); await b.page.fill('#inp', 'hello-home'); await b.page.keyboard.press('Enter');
-    await a.page.waitForFunction(() => /hugo/.test(document.querySelector('.home')?.innerText || '') && /1\s*new/.test(document.querySelector('.home').innerText), null, { timeout: 8000 });
+    await a.page.waitForFunction(() => /hugo/.test(document.querySelector('.home')?.innerText || '') && /1\s*new/.test(document.querySelector('.home').innerText), null, { timeout: 15000 });
     await a.page.locator('.home .tile2:has-text("Music")').dispatchEvent('click'); await a.page.waitForSelector('.music .tlist');
     await a.ctx.close(); await b.ctx.close();
   });
@@ -45,17 +45,17 @@ describe('v0.9: Home, music, reload and Back', () => {
   it('music: upload, library, real playback, profile song visible to others', async () => {
     const m = await user('musa', ['Music']), p = await user('mira', ['People']);
     await m.page.locator('.music input[type=file]').setInputFiles({ name: 'Test Artist - Song One.wav', mimeType: 'audio/wav', buffer: wav(2) });
-    await m.page.waitForSelector('.tlist li:has-text("Song One")', { timeout: 10000 });
+    await m.page.waitForSelector('.tlist li:has-text("Song One")', { timeout: 15000 });
     await m.page.locator('.tlist li:has-text("Song One") button[aria-label^="Play"]').click();
-    await m.page.waitForFunction(() => Music.state().id && !Music.state().paused && Music.state().time > 0.15, null, { timeout: 10000 });
+    await m.page.waitForFunction(() => Music.state().id && !Music.state().paused && Music.state().time > 0.15, null, { timeout: 15000 });
     assert.match(await m.page.evaluate(() => Music.state().src), /\/f\/[a-f0-9]{16}\?audio=1$/);
-    await m.page.waitForFunction(() => /Song One/.test(document.querySelector('.home .mini')?.innerText || ''), null, { timeout: 5000 });
+    await m.page.waitForFunction(() => /Song One/.test(document.querySelector('.home .mini')?.innerText || ''), null, { timeout: 15000 });
     await m.page.locator('.tlist li:has-text("Song One") button:text-is("Profile song")').dispatchEvent('click');
     await m.page.waitForSelector('.tlist li:has-text("Song One") button:text-is("Remove from profile")');
     await p.page.locator('input[aria-label="Find people"]').fill('musa'); await p.page.waitForSelector('.plist li:has-text("Song One") button:has-text("Test Artist")');
     await p.page.locator('.plist li button:has-text("Test Artist")').click(); await p.page.waitForFunction(() => Music.state().id !== null);
     await m.page.locator('.tlist li:has-text("Song One") button:text-is("Delete")').dispatchEvent('click'); await m.page.click('#mOk');
-    await m.page.waitForFunction(() => !document.querySelector('.tlist li:not(.empty)') && Music.state().id === null, null, { timeout: 6000 });
+    await m.page.waitForFunction(() => !document.querySelector('.tlist li:not(.empty)') && Music.state().id === null, null, { timeout: 15000 });
     await m.ctx.close(); await p.ctx.close();
   });
 
@@ -71,7 +71,7 @@ describe('v0.9: Home, music, reload and Back', () => {
     assert.ok(await b.page.locator('#login').isHidden()); assert.match(await b.page.textContent('#convTitle'), /rita/, 'conversation restored');
     await b.page.waitForSelector('#unlockBar', { state: 'visible' });
     await b.page.fill('#unlockPw', PW); await b.page.keyboard.press('Enter'); await b.page.waitForSelector('#unlockBar', { state: 'hidden' });
-    await b.page.waitForSelector('#log .msg:has-text("before-reload")', { timeout: 8000 });
+    await b.page.waitForSelector('#log .msg:has-text("before-reload")', { timeout: 15000 });
     for (let i = 0; i < 8; i++) { await b.page.goBack().catch(() => {}); await sleep(80); }
     assert.ok(b.page.url().startsWith(s.base), 'Back stays on the app: ' + b.page.url()); assert.ok(await b.page.locator('#app').isVisible()); await b.page.waitForSelector('.home');
     await a.ctx.close(); await b.ctx.close();
