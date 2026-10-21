@@ -1,5 +1,7 @@
 # CampusNet
 
+[فارسی](README.fa.md) · [English](README.md)
+
 A private, futuristic file-and-chat network for a LAN or the internet. Netrunner-style interface (black glass panels, neon green, live node map), accounts, channels, private chat, a broadcast board and fast file sharing. Node.js + WebSocket, one dependency.
 
 ## Features
