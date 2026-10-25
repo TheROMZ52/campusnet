@@ -18,6 +18,7 @@
     people: { title: tr('People'), ic: 'nodes', cat: 'Network', w: 460, h: 520, build: b => Social.people(b) },
     feed: { title: tr('Feed'), ic: 'board', cat: 'Network', w: 460, h: 520, build: b => Social.feed(b) },
     alerts: { title: tr('Alerts'), ic: 'radar', cat: 'Network', w: 420, h: 420, build: b => Social.alerts(b) },
+    admin: { title: tr('Admin'), ic: 'shield', cat: 'System', w: 580, h: 560, admin: true, build: b => Admin.build(b) },
     monitor: { title: tr('Monitor'), ic: 'monitor', cat: 'System', w: 460, h: 400, build: buildMonitor },
     security: { title: tr('Security'), ic: 'shield', cat: 'System', w: 540, h: 460, build: buildSecurity },
     settings: { title: tr('Settings'), ic: 'gear', cat: 'System', w: 440, h: 420, build: buildSettings }
@@ -117,12 +118,13 @@
   /* ---------- launcher, dock, menubar ---------- */
   let launcherOpen = false;
   function closeLauncher() { launcherOpen = false; $('#launcher').classList.remove('ov'); renderLauncher(); }
+  let adminSeen = false; document.addEventListener('cn:state', () => { if (!!st.admin !== adminSeen) { adminSeen = !!st.admin; renderLauncher(); } });
   function renderLauncher() {
     const box = $('#launcher'); box.replaceChildren();
     if (box.classList.contains('ov')) { box.append(el('h3', null, tr('Apps'))); const x = el('button', 'icon-btn ov-close'); x.append(icon('x')); x.setAttribute('aria-label', tr('Close apps')); x.onclick = closeLauncher; box.append(x); }
     ['Core', 'Network', 'System'].forEach(cat => {
       box.append(el('div', 'cat', '[ ' + tr(cat) + ' ]')); const row = el('div', 'tiles');
-      Object.entries(APPS).filter(([, a]) => a.cat === cat).forEach(([id, a]) => {
+      Object.entries(APPS).filter(([, a]) => a.cat === cat && (!a.admin || st.admin)).forEach(([id, a]) => {
         const real = a.alias || id, w = wins[real], t = el('button', 'tile' + (w && w.open && os() && !w.min ? ' run' : '')); t.type = 'button';
         const ico = el('span', 'ico'); ico.append(icon(a.ic)); t.append(ico, el('span', null, a.title)); t.dataset.app = id; t.setAttribute('aria-label', tr('Open {name}', { name: a.title })); t.onclick = () => launch(id); row.append(t);
       }); box.append(row);
@@ -265,7 +267,7 @@
     const tog = (k, label) => { const l = el('label', 'tog'), i = el('input'); i.type = 'checkbox'; i.checked = prefs[k] !== false && !!prefs[k] || (k === 'boot' && prefs.boot !== false); i.onchange = () => { prefs[k] = i.checked; savePrefs(); applyPrefs(); }; l.append(el('span', null, label), i); return l; };
     const btn = (t, fn) => { const b = el('button', 'btn', t); b.type = 'button'; b.onclick = fn; return b; }, row = el('div', 'row');
     row.append(btn(tr('Reset window layout'), () => { if (os()) tile(); else toast(tr('Window layout applies on large screens')); }), btn(tr('Forget trusted keys'), async () => { if (await ask({ title: tr('Forget trusted keys'), text: tr('Safety numbers you saved on this device will be cleared. Contacts are checked again the next time you message them.'), ok: tr('Forget'), danger: true })) { forgetKeys(); toast(tr('Trusted keys cleared')); } }));
-    body.append(langRow(), tog('boot', tr('Boot animation after sign-in')), tog('crt', tr('CRT scanlines and vignette')), tog('mesh', tr('Animated network background')), tog('sound', tr('Sound alerts for DMs and mentions')), row, el('p', 'note', tr('Settings are stored in this browser only.')));
+    body.append(langRow(), tog('boot', tr('Boot animation after sign-in')), tog('crt', tr('CRT scanlines and vignette')), tog('mesh', tr('Animated network background')), tog('sound', tr('Sound alerts for DMs and mentions')), row, accountBox(), el('p', 'note', tr('Settings are stored in this browser only.')));
   }
 
   /* ---------- OS pieces: messages sidebar, start menu, lock screen, boot ---------- */
@@ -280,7 +282,7 @@
     startMenu.replaceChildren(); const head = el('div', 'sm-head'); head.append(el('span', 'av', st.me ? st.me[0] : '?'), el('b', null, st.me || 'guest'), el('small', 'dim', st.admin ? 'admin' : 'user')); startMenu.append(head);
     ['Core', 'Network', 'System'].forEach(cat => {
       startMenu.append(el('div', 'cat', '[ ' + tr(cat) + ' ]'));
-      Object.entries(APPS).filter(([, a]) => a.cat === cat).forEach(([id, a]) => { const it = el('button', 'mi'); it.type = 'button'; it.setAttribute('role', 'menuitem'); it.append(icon(a.ic), a.title); it.onclick = () => { closeStart(); launch(id); }; startMenu.append(it); });
+      Object.entries(APPS).filter(([, a]) => a.cat === cat && (!a.admin || st.admin)).forEach(([id, a]) => { const it = el('button', 'mi'); it.type = 'button'; it.setAttribute('role', 'menuitem'); it.append(icon(a.ic), a.title); it.onclick = () => { closeStart(); launch(id); }; startMenu.append(it); });
     });
     const foot = el('div', 'sm-foot'), lk = el('button', 'btn', tr('Lock')), so = el('button', 'btn', tr('Sign out')); lk.type = so.type = 'button';
     lk.onclick = () => { closeStart(); lock(); }; so.onclick = () => { closeStart(); $('#outBtn').click(); }; foot.append(lk, so); startMenu.append(foot);

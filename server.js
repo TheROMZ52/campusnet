@@ -4,6 +4,8 @@
 const http = require('http'), https = require('https'), fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const { WebSocketServer } = require('./vendor/ws');
+const { zip: makeZip } = require('./lib/zip');
+const VERSION = (() => { try { return require('./package.json').version; } catch { return '?'; } })();
 
 const log = (lvl, msg) => console.log(`${new Date().toISOString()} ${lvl} ${msg}`);
 const bail = m => { console.error('\n  configuration error: ' + m + '\n'); process.exit(1); };
@@ -109,6 +111,7 @@ const blocksEither = (a, b) => { const x = urec(a), y = urec(b); return !!((x &&
 function toggle(arr, v) { const i = arr.indexOf(v); if (i < 0) { arr.push(v); return true; } arr.splice(i, 1); return false; }
 /* groups / communities (v0.8): server-side membership and roles; room id is 'g:<id>'. Not end-to-end encrypted. */
 const groups = Object.assign(Object.create(null), rd('groups.json', {}));
+const settings = Object.assign({ registration: 'open' }, rd('settings.json', {}));   // changed at runtime by administrators
 const groupOf = room => (typeof room === 'string' && room.startsWith('g:')) ? groups[room.slice(2)] : undefined;
 const roleOf = (g, name) => (g && typeof name === 'string') ? g.members[ukey(name)] : undefined;
 const roomOk = (room, who) => (typeof room === 'string' && ROOMS.includes(room)) || !!(who && roleOf(groupOf(room), who));
@@ -191,7 +194,7 @@ function addRoomMsg(room, from, text, kind, extra) {
 }
 function dropSession(s, why) {
   endCallOf(s.name, 'disconnect'); sessions.delete(s.token); const w = s.ws;
-  if (w) { s.ws = null; w.s = null; send(w, { t: 'err', fatal: true, text: 'Session ended. Sign in again.', reason: why }); try { w.close(); } catch { /* ignore */ } pushUsers(); }
+  if (w) { s.ws = null; w.s = null; send(w, { t: 'err', fatal: true, text: why === 'banned' ? 'This account is suspended.' : why === 'deleted' ? 'This account was deleted.' : why === 'reset' ? 'Your password was reset by an administrator. Sign in with the temporary password.' : 'Session ended. Sign in again.', reason: why }); try { w.close(); } catch { /* ignore */ } pushUsers(); }
   log('INFO', `session of ${s.name} dropped: ${why}`);
 }
 function authToken(t) {
@@ -277,6 +280,42 @@ function handleDownload(req, res, url, id) {
   res.on('close', () => st.destroy());
 }
 
+/* ---------- admin tools, account deletion and backups (v0.13) ---------- */
+const BACKUP_DIR = path.join(DATA, 'backups'), BACKUP_HOURS = num('BACKUP_EVERY_HOURS', 24, 0), BACKUP_KEEP = Math.max(1, Math.floor(num('BACKUP_KEEP', 7, 1)));
+const BACKUP_RE = /^campusnet-backup-\d{8}-\d{6}\.zip$/;
+const snapshot = () => ({ 'users.json': users, 'messages.json': hist, 'dms.json': Object.fromEntries(dms), 'notices.json': notices, 'files.json': files, 'groups.json': groups, 'posts.json': posts, 'notifs.json': notifs, 'settings.json': settings });
+function listBackups() { try { return fs.readdirSync(BACKUP_DIR).filter(n => BACKUP_RE.test(n)).sort().reverse().map(n => { const st = fs.statSync(path.join(BACKUP_DIR, n)); return { name: n, size: st.size, ts: Math.round(st.mtimeMs) }; }); } catch { return []; } }
+function makeBackup(reason) {   // everything except uploaded files, taken from memory so it is always consistent
+  const now = new Date(), stamp = now.toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');
+  const entries = Object.entries(snapshot()).map(([name, v]) => ({ name, data: Buffer.from(JSON.stringify(v)) }));
+  entries.push({ name: 'manifest.json', data: Buffer.from(JSON.stringify({ app: 'CampusNet', version: VERSION, created: now.toISOString(), reason, users: Object.keys(users).length, files: files.length, note: 'Uploaded files are not included: copy the uploads folder separately.' }, null, 2)) });
+  fs.mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 }); const name = `campusnet-backup-${stamp}.zip`, fp = path.join(BACKUP_DIR, name), tmp = fp + '.tmp';
+  fs.writeFileSync(tmp, makeZip(entries, now), { mode: 0o600 }); fs.renameSync(tmp, fp);
+  const all = listBackups(); all.slice(BACKUP_KEEP).forEach(b => { try { fs.unlinkSync(path.join(BACKUP_DIR, b.name)); } catch { /* ignore */ } });
+  log('INFO', `backup ${name} (${reason}), keeping ${Math.min(all.length, BACKUP_KEEP)}`); return { name, size: fs.statSync(fp).size, ts: Date.now() };
+}
+if (BACKUP_HOURS > 0) {
+  const due = () => { const l = listBackups()[0]; return !l || Date.now() - l.ts >= BACKUP_HOURS * 3600000; };
+  const run = () => { if (due()) { try { makeBackup('auto'); } catch (e) { log('ERROR', 'backup failed: ' + e.message); } } };
+  setTimeout(run, num('BACKUP_FIRST_DELAY_MS', 60000, 1)).unref(); setInterval(run, 900000).unref();
+}
+function deleteUser(key) {   // removes an account and what only it owned; public history keeps the name
+  const u = users[key]; if (!u) return false; const name = u.name, sess = findByName(name); if (sess) dropSession(sess, 'deleted');
+  delete users[key];
+  for (const k of [...dms.keys()]) { const [a, b] = k.split('|'); if (a === key || b === key) dms.delete(k); } persistDms();
+  for (const g of Object.values(groups)) { if (g.owner === key) { Object.keys(g.members).forEach(k => { if (k !== key && users[k]) toUser(users[k].name, { t: 'gleave', id: g.id }); }); delete groups[g.id]; } else if (g.members[key]) { delete g.members[key]; pushGroup(g); } } save('groups.json', groups);
+  files.filter(f => ukey(f.owner) === key).forEach(f => fs.unlink(path.join(UP, f.id), () => {})); files = files.filter(f => ukey(f.owner) !== key); save('files.json', files);
+  const gone = posts.filter(p => ukey(p.by) === key).map(p => p.id); for (let i = posts.length - 1; i >= 0; i--) if (ukey(posts[i].by) === key) posts.splice(i, 1);
+  posts.forEach(p => { const i = p.likes.findIndex(x => ukey(x) === key); if (i >= 0) p.likes.splice(i, 1); }); save('posts.json', posts);
+  delete notifs[key]; Object.values(notifs).forEach(arr => { for (let i = arr.length - 1; i >= 0; i--) if (ukey(arr[i].from) === key) arr.splice(i, 1); }); save('notifs.json', notifs);
+  Object.values(users).forEach(o => { for (const f of ['following', 'blocked']) if (o[f]) o[f] = o[f].filter(x => x !== key); if (o.muted) o.muted = o.muted.filter(x => x !== 'd:' + key); if (o.reads) delete o.reads['d:' + key]; }); save('users.json', users);
+  gone.forEach(id => bcast({ t: 'pdel', id })); bcast({ t: 'userdeleted', name }); bcast({ t: 'files', files: publicFiles() }); pushUsers(); log('INFO', `account "${name}" deleted`); return true;
+}
+const TEMP_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+const tempPassword = () => Array.from(crypto.randomBytes(12), b => TEMP_ALPHABET[b % TEMP_ALPHABET.length]).join('');
+function dirSize(d) { let n = 0; try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); try { n += e.isDirectory() ? dirSize(f) : fs.statSync(f).size; } catch { /* ignore */ } } } catch { /* ignore */ } return n; }
+const validBlob = b => !!b && typeof b.s === 'string' && typeof b.iv === 'string' && typeof b.ct === 'string' && b.s.length <= 100 && b.iv.length <= 100 && b.ct.length <= 3000 && b.ct.length > 0;
+
 const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h))((req, res) => {
   let url; try { url = new URL(req.url, 'http://x'); } catch { return json(res, 400, { error: 'bad url' }); }
   if (url.pathname === '/healthz') return json(res, 200, { ok: true, uptime: Math.round(process.uptime()), online: online().length });
@@ -286,6 +325,13 @@ const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h
     return json(res, 200, { ok: true }, { 'Set-Cookie': `cn_s=${s.token}; HttpOnly; SameSite=Strict; Path=/f/; Max-Age=${Math.floor(SESSION_MS / 1000)}${isSecure(req) ? '; Secure' : ''}` });
   }
   if (req.method === 'POST' && url.pathname === '/upload') return handleUpload(req, res);
+  const bk = url.pathname.match(/^\/f\/backup\/([A-Za-z0-9._-]+)$/);   // administrators only; the download cookie is scoped to /f/
+  if (req.method === 'GET' && bk) {
+    const who = authToken(cookie(req, 'cn_s')); if (!who || !who.admin) return json(res, 403, { error: 'forbidden' });
+    let name = bk[1]; if (name === 'now') { try { name = makeBackup('download').name; } catch (e) { log('ERROR', 'backup failed: ' + e.message); return json(res, 500, { error: 'backup failed' }); } }
+    if (!BACKUP_RE.test(name)) return json(res, 404, { error: 'not found' });
+    return fs.readFile(path.join(BACKUP_DIR, name), (e, buf) => { if (e) return json(res, 404, { error: 'not found' }); res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': buf.length, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'private, no-store', ...SEC }); res.end(buf); });
+  }
   const dl = url.pathname.match(/^\/f\/([a-f0-9]{16})$/);
   if (req.method === 'GET' && dl) return handleDownload(req, res, url, dl[1]);
   if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'method not allowed' });
@@ -339,12 +385,14 @@ async function doJoin(ws, m) {
     if (u) {
       const ok = safeEq(await hashPw(pw, u.salt, u.v), u.hash);
       if (!ok) { strike(fk, 5, 60000); strike(ws.ip, 30, 120000); log('WARN', `failed sign-in for "${name}" from ${ws.ip}`); return fail('Invalid username or password.'); }
+      if (u.banned) return fail('This account is suspended.');
       if (u.v !== 2) { u.salt = crypto.randomBytes(16).toString('hex'); u.hash = await hashPw(pw, u.salt, 2); u.v = 2; save('users.json', users); log('INFO', `upgraded password hash of "${u.name}"`); }
     } else {
       if (m.mode === 'login') { await hashPw(pw, DUMMY_SALT, 2); strike(fk, 5, 60000); strike(ws.ip, 30, 120000); return fail('Invalid username or password.'); }   // same cost and message as a wrong password
       if (blocked('reg|' + ws.ip)) return fail('Too many accounts created from this address. Try later.');
       if (RESERVED.has(key)) return fail('That name is reserved.');
       if (ADMIN_USERS.includes(key) && !(ADMIN && safeEq(sstr(m.adminCode), ADMIN))) return fail('This name is reserved for an administrator. Enter the admin code.', { need: 'adminCode' });
+      if (settings.registration === 'closed' && !ADMIN_USERS.includes(key)) return fail('New accounts are closed. Ask an administrator.');
       if (pw.length < 8) return fail('Choose a password of at least 8 characters.');
       if (WEAK.has(pw.toLowerCase()) || pw.toLowerCase() === key) return fail('That password is too easy to guess.');
       const salt = crypto.randomBytes(16).toString('hex');
@@ -359,7 +407,7 @@ async function doJoin(ws, m) {
   if (ws.readyState !== 1) { return; }
   clearTimeout(ws.joinTimer); s.ws = ws; ws.s = s;
   const rec = users[s.name.toLowerCase()] || {};
-  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist: histFor(rec), dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, groups: myGroups(s.name), profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name) });
+  send(ws, { t: 'welcome', me: s.name, token: s.token, admin: s.admin, site: SITE, rooms: ROOMS, hist: histFor(rec), dms: dmsFor(s.name), users: userList(), all: allNames(), notices, files: publicFiles(), pub: rec.pub || null, blob: rec.blob || null, keys: publicKeys(), maxMB: Math.round(MAX_FILE / 1048576), prefs: prefsOf(rec), myProfile: rec.profile ? pubProfile(rec) : { d: '', b: '', a: '' }, groups: myGroups(s.name), profiles: profilesMap(), notifs: (notifs[ukey(s.name)] || []).slice(0, 50), peerReads: peerReadsFor(s.name), mustChange: !!rec.tempPw });
   pushUsers();
   addRoomMsg('general', 'system', `${s.name} connected`, 'sys');
 }
@@ -496,6 +544,38 @@ function onMessage(ws, m) {
     clearTimeout(c.timer); c.state = 'active'; toUser(c.a, { t: 'callstate', id: c.id, state: 'accepted', peer: c.b }); send(ws, { t: 'callstate', id: c.id, state: 'accepted', peer: c.a });
   } else if (m.t === 'callend') {
     const c = calls.get(m.id); if (!c || ukey(c.a) !== ukey(s.name) && ukey(c.b) !== ukey(s.name)) return; endCall(c.id, c.state === 'ringing' && ukey(c.a) === ukey(s.name) ? 'cancelled' : 'ended');
+  } else if (m.t.startsWith('admin') && m.t !== 'admin') {
+    if (!s.admin) return send(ws, { t: 'err', text: 'Only admins can do this.' });
+    const target = () => { const u = urec(m.name); if (!u) { send(ws, { t: 'err', text: 'No such user.' }); return null; } if (ADMIN_USERS.includes(ukey(u.name)) || ukey(u.name) === ukey(s.name)) { send(ws, { t: 'err', text: 'You cannot do this to an administrator.' }); return null; } return u; };
+    const stats = () => { const fb = files.reduce((a, f) => a + f.size, 0), b = listBackups(); return { users: Object.keys(users).length, online: online().length, files: files.length, bytes: fb, quota: MAX_TOTAL, dataBytes: dirSize(DATA), uptime: Math.round(process.uptime()), node: process.version, version: VERSION, registration: settings.registration, backups: b, backupHours: BACKUP_HOURS, backupKeep: BACKUP_KEEP }; };
+    if (m.t === 'adminusers') {
+      const fs2 = {}; files.forEach(f => { const k = ukey(f.owner); fs2[k] = fs2[k] || { n: 0, b: 0 }; fs2[k].n++; fs2[k].b += f.size; });
+      send(ws, { t: 'adminusers', users: Object.values(users).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 1000).map(u => ({ n: u.name, created: u.created || 0, last: u.last || 0, online: !!(findByName(u.name) || {}).ws, banned: !!u.banned, admin: ADMIN_USERS.includes(ukey(u.name)), files: (fs2[ukey(u.name)] || {}).n || 0, bytes: (fs2[ukey(u.name)] || {}).b || 0 })) });
+    } else if (m.t === 'adminstats') send(ws, { t: 'adminstats', ...stats() });
+    else if (m.t === 'adminban') { const u = target(); if (!u) return; if (m.on) { u.banned = { ts: Date.now(), by: s.name }; const t = findByName(u.name); if (t) dropSession(t, 'banned'); } else delete u.banned; save('users.json', users); log('INFO', `${s.name} ${m.on ? 'suspended' : 'restored'} "${u.name}"`); send(ws, { t: 'adminresult', action: m.on ? 'ban' : 'unban', name: u.name }); }
+    else if (m.t === 'adminreset') {
+      const u = target(); if (!u) return; const temp = tempPassword(), salt = crypto.randomBytes(16).toString('hex');
+      hashPw(temp, salt, 2).then(h => { u.salt = salt; u.hash = h; u.v = 2; u.tempPw = true; delete u.blob; delete u.pub; save('users.json', users); const t = findByName(u.name); if (t) dropSession(t, 'reset'); log('INFO', `${s.name} reset the password of "${u.name}"`); send(ws, { t: 'adminresult', action: 'reset', name: u.name, temp }); }).catch(e => log('ERROR', 'reset failed: ' + e.message));
+    } else if (m.t === 'admindelete') { const u = target(); if (!u) return; const name = u.name; deleteUser(ukey(name)); send(ws, { t: 'adminresult', action: 'delete', name }); }
+    else if (m.t === 'adminreg') { settings.registration = m.open ? 'open' : 'closed'; save('settings.json', settings); log('INFO', `${s.name} set registration to ${settings.registration}`); send(ws, { t: 'adminstats', ...stats() }); }
+    else if (m.t === 'adminbackup') { try { makeBackup('manual'); } catch (e) { log('ERROR', 'backup failed: ' + e.message); return send(ws, { t: 'err', text: 'Server error.' }); } send(ws, { t: 'adminstats', ...stats() }); }
+    else if (m.t === 'adminrmbackup') { const n = sstr(m.file); if (BACKUP_RE.test(n)) { try { fs.unlinkSync(path.join(BACKUP_DIR, n)); } catch { /* ignore */ } } send(ws, { t: 'adminstats', ...stats() }); }
+  } else if (m.t === 'chpw') {
+    const u = urec(s.name), old = sstr(m.old), nw = sstr(m['new']), fk = ws.ip + '|' + ukey(s.name); if (!u) return;
+    if (blocked(fk)) return send(ws, { t: 'err', text: 'Too many attempts. Wait a minute.' });
+    if (nw.length < 8 || nw.length > 128) return send(ws, { t: 'err', text: 'Choose a password of at least 8 characters.' });
+    if (WEAK.has(nw.toLowerCase()) || nw.toLowerCase() === ukey(s.name)) return send(ws, { t: 'err', text: 'That password is too easy to guess.' });
+    if (u.blob && !validBlob(m.blob)) return send(ws, { t: 'err', text: 'Invalid key.' });
+    hashPw(old, u.salt, u.v).then(async h => {
+      if (!safeEq(h, u.hash)) { strike(fk, 5, 60000); return send(ws, { t: 'err', text: 'Wrong password.' }); }
+      if (u.blob) u.blob = { s: m.blob.s, iv: m.blob.iv, ct: m.blob.ct };
+      u.salt = crypto.randomBytes(16).toString('hex'); u.hash = await hashPw(nw, u.salt, 2); u.v = 2; delete u.tempPw; save('users.json', users); log('INFO', `"${u.name}" changed their password`); send(ws, { t: 'pwchanged' });
+    }).catch(e => log('ERROR', 'chpw failed: ' + e.message));
+  } else if (m.t === 'delaccount') {
+    const u = urec(s.name), fk = ws.ip + '|' + ukey(s.name); if (!u) return;
+    if (ADMIN_USERS.includes(ukey(u.name))) return send(ws, { t: 'err', text: 'Administrators cannot delete their own account.' });
+    if (blocked(fk)) return send(ws, { t: 'err', text: 'Too many attempts. Wait a minute.' });
+    hashPw(sstr(m.password), u.salt, u.v).then(h => { if (!safeEq(h, u.hash)) { strike(fk, 5, 60000); return send(ws, { t: 'err', text: 'Wrong password.' }); } deleteUser(ukey(u.name)); }).catch(e => log('ERROR', 'delaccount failed: ' + e.message));
   } else if (m.t === 'ping') {
     send(ws, { t: 'pong', id: sstr(m.id).slice(0, 32) });
   } else if (m.t === 'gcreate') {
@@ -549,7 +629,7 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('close', () => {
     clearTimeout(ws.joinTimer); const s = ws.s;
-    if (s && s.ws === ws) { s.ws = null; endCallOf(s.name, 'disconnect'); pushUsers(); addRoomMsg('general', 'system', `${s.name} disconnected`, 'sys'); }
+    if (s && s.ws === ws) { s.ws = null; endCallOf(s.name, 'disconnect'); const lu = users[s.name.toLowerCase()]; if (lu) { lu.last = Date.now(); save('users.json', users); } pushUsers(); addRoomMsg('general', 'system', `${s.name} disconnected`, 'sys'); }
   });
   ws.on('error', () => {});
 });

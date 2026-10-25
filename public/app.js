@@ -76,6 +76,22 @@ const saveTofu = () => { try { localStorage.setItem('cn:fp', JSON.stringify(tofu
 const canon = n => st.all.find(x => same(x, n)) || (same(n, st.me) ? st.me : '');
 function dateLabel(d, opt) { return d.toLocaleDateString(I18N.lang === 'fa' ? 'fa-IR-u-ca-persian' : undefined, opt); }
 function langRow() { const l = el('label', 'tog'), s = el('select'); s.setAttribute('aria-label', tr('Language')); [['en', 'English'], ['fa', '\u0641\u0627\u0631\u0633\u06CC']].forEach(([c, n]) => s.append(new Option(n, c))); s.value = I18N.lang; s.onchange = () => I18N.setLang(s.value); l.append(el('span', null, tr('Language')), s); return l; }
+let pendingPw = null;
+/* Settings > Account: change password (the key that locks your private messages is re-locked, not replaced) and delete account */
+function accountBox() {
+  const box = el('div', 'acct'), field = label => { const i = el('input'); i.type = 'password'; i.autocomplete = 'new-password'; i.placeholder = label; i.setAttribute('aria-label', label); return i; };
+  const oldI = field(tr('Current password')), newI = field(tr('New password')), new2 = field(tr('Repeat new password')), delI = field(tr('Password')), msg = el('small', 'note');
+  const btn = (t, fn, c) => { const b = el('button', 'btn' + (c ? ' ' + c : ''), t); b.type = 'button'; b.onclick = fn; return b; };
+  const change = btn(tr('Change password'), async () => {
+    msg.textContent = ''; if (newI.value.length < 8) { msg.textContent = tr('Choose a password of at least 8 characters.'); return; } if (newI.value !== new2.value) { msg.textContent = tr('Passwords do not match.'); return; }
+    let blob; if (E2E.blob) { try { blob = await CN.rewrap(E2E.blob, oldI.value, newI.value); } catch { msg.textContent = tr('Wrong password.'); return; } }
+    pendingPw = { pw: newI.value, blob }; send({ t: 'chpw', old: oldI.value, new: newI.value, blob });
+  });
+  const del = btn(tr('Delete my account'), async () => { if (await ask({ title: tr('Delete my account'), text: tr('Your account, files, posts and private messages will be deleted for good.'), ok: tr('Delete'), danger: true })) send({ t: 'delaccount', password: delI.value }); }, 'bad');
+  accountReset = () => { [oldI, newI, new2, delI].forEach(i => { i.value = ''; }); msg.textContent = tr('Password changed'); };
+  box.append(el('h4', 'sh', tr('Account')), oldI, newI, new2, change, msg, el('h4', 'sh', tr('Delete account')), delI, del); return box;
+}
+let accountReset = () => {};
 function showUnlock(on) { const f = $('#unlockBar'); if (f) f.hidden = !on; }
 async function doUnlock(pw) {
   try { E2E.priv = await CN.unlock(E2E.blob, pw); } catch { E2E.priv = null; toast(tr('Wrong password'), 'bad'); return false; }
@@ -95,11 +111,12 @@ async function setupKeys(m) {
     return;
   }
   try {
+    if (m.blob) E2E.blob = m.blob;
     const keep = E2E.priv && m.pub && E2E.pub && m.pub.x === E2E.pub.x && m.pub.y === E2E.pub.y;
     if (!keep) {
       E2E.priv = null;
       if (m.blob && m.pub) { try { E2E.priv = await CN.unlock(m.blob, st.loginPw); E2E.pub = m.pub; } catch { E2E.priv = null; } }
-      if (!E2E.priv) { const id = await CN.create(st.loginPw); E2E.priv = id.priv; E2E.pub = id.pub; send({ t: 'setkey', pub: id.pub, blob: id.blob }); if (m.blob) toast(tr('Your encryption key was reset'), 'warn', 6000); }
+      if (!E2E.priv) { const id = await CN.create(st.loginPw); E2E.priv = id.priv; E2E.pub = id.pub; send({ t: 'setkey', pub: id.pub, blob: id.blob }); E2E.blob = id.blob; if (m.blob) toast(tr('Your encryption key was reset'), 'warn', 6000); }
     }
     E2E.keys[m.me] = E2E.pub; E2E.fp = await CN.fingerprint(E2E.pub); if (E2E.priv) { E2E.locked = false; showUnlock(false); }
   } catch { E2E.priv = null; toast(tr('Encryption setup failed'), 'bad'); }
@@ -193,7 +210,7 @@ async function handle(m) {
       gateLog('[+] access granted', 'ok'); setBusy(false); $('#login').hidden = true; $('#app').hidden = false;
       $('#siteBar').textContent = m.site; document.title = m.site; $('#meBar').textContent = m.me + (m.admin ? ' \u00B7 admin' : ''); $('#meAv').textContent = m.me[0];
       $('#limit').textContent = tr('Up to {n} MB per file', { n: m.maxMB }); $('#sbMax').textContent = m.maxMB + ' MB';
-      setLink('online', 'ok'); renderAll(); renderReplyBar(); markRead(); viz(); if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
+      setLink('online', 'ok'); renderAll(); renderReplyBar(); markRead(); viz(); if (m.mustChange) { toast(tr('An administrator reset your password. Choose a new one in Settings > Account.'), 'warn', 12000); if (window.Shell) Shell.launch('settings'); } if (!matchMedia('(pointer:coarse)').matches) $('#inp').focus();
       if (first) local(tr('Welcome, {name}. Type /help for commands.', { name: m.me }));
       emitUI('welcome');
       break;
@@ -208,6 +225,8 @@ async function handle(m) {
     case 'pong': { const w = pingWait[m.id]; if (w) { delete pingWait[m.id]; w.res(Math.round(performance.now() - w.t0)); } break; }
     case 'group': { addGroup(m.g); renderRooms(); if (key(st.cur) === 'r:g:' + m.g.id) { renderLog(); renderPins(); } break; }
     case 'gleave': { delete st.groups[m.id]; delete st.hist['g:' + m.id]; if (key(st.cur) === 'r:g:' + m.id) open('r', st.rooms[0] || 'general'); else renderRooms(); break; }
+    case 'pwchanged': { if (pendingPw) { st.loginPw = pendingPw.pw; if (pendingPw.blob) E2E.blob = pendingPw.blob; pendingPw = null; } accountReset(); toast(tr('Password changed'), 'ok', 3000); break; }
+    case 'userdeleted': { delete st.dms[m.name]; delete st.profiles[m.name]; if (st.cur.k === 'd' && same(st.cur.id, m.name)) open('r', st.rooms[0] || 'general'); else renderAll(); break; }
     case 'upd': { const a = st.hist[m.room], i = a ? a.findIndex(x => x.id === m.m.id) : -1; if (i >= 0) a[i] = m.m; if (st.cur.k === 'r' && st.cur.id === m.room) { updateRow(m.m); renderPins(); } break; }
     case 'dmupd': { const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from, a = st.dms[other], i = a ? a.findIndex(x => x.id === dm.id) : -1; if (i >= 0) a[i] = dm; if (st.cur.k === 'd' && same(st.cur.id, other)) updateRow(dm); break; }
     case 'dmdel': { const other = same(m.a, st.me) ? m.b : m.a, a = st.dms[other], i = a ? a.findIndex(x => x.id === m.id) : -1; if (i >= 0) a.splice(i, 1); const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
@@ -226,6 +245,7 @@ async function handle(m) {
       } else { local(tr(m.text), true); toast(tr(m.text), 'bad'); }
       break;
   }
+  if (typeof Admin !== 'undefined' && /^admin(users|stats|result)$/.test(m.t)) Admin.onMsg(m);
   if (typeof Call !== 'undefined' && (m.t === 'incoming' || m.t === 'callstate')) Call.onMsg(m);
   if (typeof Social !== 'undefined' && /^(prefs|profile|notif|results|feed|post|plike|pdel|group|gleave|gresults)$/.test(m.t)) Social.onMsg(m);
   emitUI('state');

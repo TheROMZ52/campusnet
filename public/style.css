@@ -561,3 +561,10 @@ html.fa .callbox{direction:rtl}
 #meBar{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:480px){#bar{gap:6px;padding-left:8px;padding-right:8px}#bar .chip{padding:0 8px;gap:6px}#bar .chip.me{flex:0 1 auto;max-width:34vw}#bar select{flex:0 1 96px}}
 @media (max-width:360px){#bar .chip:not(.me) #stat,#bar .chip:not(.me) span:not(.led){display:none}}
+
+/* ---- v0.13: admin window, account box ---- */
+.admin .temp-box{gap:8px}.admin code.temp{font:700 20px var(--mono);letter-spacing:.08em;color:var(--neon);user-select:all;padding:6px 8px;border:1px dashed var(--neon);border-radius:var(--r);text-align:center}
+.admin .btn.on{border-color:var(--neon);color:var(--neon)}.admin a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.admin .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.acct{display:flex;flex-direction:column;gap:8px;margin-top:10px}.acct input{background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:var(--r);padding:6px 8px;font:13px var(--sans)}
+.acct .sh{margin:6px 0 0;font:700 12px var(--mono);color:var(--neon);text-transform:uppercase;letter-spacing:.06em}.acct .btn.bad{color:var(--bad)}

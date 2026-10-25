@@ -27,6 +27,13 @@ window.CN = (function () {
       const imported = await subtle.importKey('jwk', priv, EC, false, ['deriveKey']);
       return { priv: imported, pub, blob: { s: b64(salt), iv: b64(iv), ct: b64(ct) } };
     },
+    /* change the password that locks the private key without touching the key itself (throws if the old password is wrong) */
+    async rewrap(blob, oldPassword, newPassword) {
+      const pt = await subtle.decrypt({ name: 'AES-GCM', iv: unb64(blob.iv) }, await wrapKey(oldPassword, unb64(blob.s)), unb64(blob.ct));
+      const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, await wrapKey(newPassword, salt), pt);
+      return { s: b64(salt), iv: b64(iv), ct: b64(ct) };
+    },
     async unlock(blob, password) {
       const pt = await subtle.decrypt({ name: 'AES-GCM', iv: unb64(blob.iv) }, await wrapKey(password, unb64(blob.s)), unb64(blob.ct));
       return subtle.importKey('jwk', JSON.parse(td.decode(pt)), EC, false, ['deriveKey']);
