@@ -7,7 +7,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..'), HAS_OPENSSL = spawnSync('openssl', ['version']).status === 0;
 const kids = []; afterEach(() => { while (kids.length) kids.pop().kill(); });
 function project(files = {}) {   // a minimal copy of the project: what the deployment zip contains
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campusnet-start-')); fs.cpSync(path.join(ROOT, 'vendor'), path.join(dir, 'vendor'), { recursive: true }); fs.cpSync(path.join(ROOT, 'public'), path.join(dir, 'public'), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campusnet-start-')); fs.cpSync(path.join(ROOT, 'vendor'), path.join(dir, 'vendor'), { recursive: true }); fs.cpSync(path.join(ROOT, 'public'), path.join(dir, 'public'), { recursive: true }); fs.cpSync(path.join(ROOT, 'lib'), path.join(dir, 'lib'), { recursive: true }); fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(dir, 'package.json'));
   fs.mkdirSync(path.join(dir, 'scripts')); fs.copyFileSync(path.join(ROOT, 'server.js'), path.join(dir, 'server.js')); fs.copyFileSync(path.join(ROOT, 'scripts', 'start.js'), path.join(dir, 'scripts', 'start.js'));
   for (const [n, c] of Object.entries(files)) fs.writeFileSync(path.join(dir, n), c); return dir;
 }
