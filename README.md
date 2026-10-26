@@ -27,6 +27,15 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Admin tools, accounts and backups (v0.13)
+Administrators (`ADMIN_USERS`) get an **Admin** app in the launcher (hidden for everyone else, and every action is checked again on the server) with three tabs:
+- **Users:** search, suspend / restore (the user is signed out and cannot sign in until restored), reset password, delete. A reset gives a one-time **temporary password** (shown once, hand it over in person) and a new encryption identity, so that user cannot read their old private messages; they are asked to choose a new password after signing in. Deleting removes the account, its files, posts, groups it owns and its private messages. Administrators cannot be suspended, reset or deleted from this window.
+- **Server:** users, online now, files, storage, data folder size, uptime, version, and **Close registration / Open registration** (existing accounts are not affected).
+- **Backups:** back up now, download or delete a backup, download a fresh snapshot.
+- **Your account (Settings > Account):** change password (the key that locks your private messages is re-locked with the new password, not replaced, so old private messages stay readable) and delete your own account (needs your password; administrators cannot delete theirs).
+- **Automatic backups:** a zip of accounts, messages, direct messages (ciphertext), notices, posts, groups, file list and settings is written to `DATA_DIR/backups` every `BACKUP_EVERY_HOURS` (default 24, `0` turns it off); the newest `BACKUP_KEEP` (default 7) are kept. Backups do **not** contain the uploaded files themselves: copy `DATA_DIR/uploads` separately. Only administrators can download backups (`/f/backup/<name>`).
+- **Restore:** stop the server, then `node scripts/restore.js <backup.zip> --yes` (add `--data DIR` if needed). The current data files are moved to `before-restore-<time>/` first, nothing is deleted.
+
 ## Voice calls (v0.12)
 Open a direct message with someone who is online and press **[Call]** in the conversation header. They get an incoming-call box (ring, Accept / Decline); during the call you can mute and end it. One call at a time per person; a missed call leaves an alert.
 - **How it works:** signaling and audio both travel over the existing WebSocket and the server only relays. It needs no UDP ports, STUN or TURN, so it works on any host that supports WebSocket, including a domestic-only network. The trade-off is quality and delay: voice is **8 kHz telephone quality** (about 8 KB/s each way), and delay is typically a few hundred milliseconds because audio goes through the server over TCP.
@@ -91,6 +100,8 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 | `HTTPS` | off | Set to `1` to serve HTTPS with an auto-created self-signed certificate (needs openssl) |
 | `TLS_CERT`, `TLS_KEY` | none | Paths to your own certificate and key |
 | `TRUST_PROXY` | off | Number of reverse proxies in front of the server (`1` = one). The client address is the entry that many places from the end of `X-Forwarded-For`, so entries a client forged on the left are ignored; set `2` behind two proxies (for example a CDN plus the platform) |
+| `BACKUP_EVERY_HOURS` | `24` | Hours between automatic backups (`0` = off) |
+| `BACKUP_KEEP` | `7` | How many automatic backups to keep |
 | `MAX_FILE_MB` | `100` | Max size per file |
 | `MAX_STORAGE_MB` | `2000` | Max total upload storage |
 | `DATA_DIR` | `./data` | Where chat history and uploads are kept |
@@ -128,7 +139,7 @@ What is in place:
 
 ## Backup and restore
 All state is in `DATA_DIR` (default `./data`): `users.json` (accounts, profiles, follows, blocks, read positions, mutes), `messages.json`, `dms.json` (ciphertext), `notices.json`, `posts.json`, `notifs.json`, `groups.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
-- **Backup:** stop the server (or use a filesystem snapshot), then copy the whole `DATA_DIR`. Copying while it runs can capture `files.json` and `uploads/` at slightly different moments.
+- **Backup:** the server makes zip backups by itself (see "Admin tools, accounts and backups"); they hold the data files but not `uploads/`. For a complete copy, stop the server (or use a filesystem snapshot), then copy the whole `DATA_DIR`. Copying while it runs can capture `files.json` and `uploads/` at slightly different moments.
 - **Restore:** stop the server, replace `DATA_DIR` with the backup, start it again. If a JSON file is corrupt the server falls back to its `.bak` and keeps the corrupt file for inspection.
 - Back up `users.json` together with `dms.json`: DMs can only be read with the users' passwords, which unlock their keys.
 
@@ -137,7 +148,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (78, no browser). `npm run test:e2e` (32 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (91, no browser). `npm run test:e2e` (41 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |
@@ -148,6 +159,9 @@ GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
 | `public/app.js` | UI logic and WebSocket protocol |
 | `public/net.js` | Background mesh and live topology canvas |
 | `public/crypto.js` | End-to-end encryption helpers (Web Crypto) |
+| `public/admin.js` | Admin window (users, server, backups) |
+| `lib/zip.js` | Small zip writer and reader used by backups |
+| `scripts/restore.js` | Restore a backup (stop the server first) |
 | `public/shell.js` | Desktop shell: windows, launcher, menubar, dock, system apps |
 | `public/demo.js` | Preview mode with a simulated network |
 | `Dockerfile` | Container build |

@@ -40,7 +40,9 @@ Voice calls relay audio through the server (about 16 KB/s per active call), so t
 
 ## 5. Updating and backups
 - Update: build a new zip and upload it. Data stays as long as `DATA_DIR` is outside the uploaded folder.
-- Backup: copy the whole `DATA_DIR` (see "Backup and restore" in the README).
+- Backup: the server writes a zip of its data files to `DATA_DIR/backups` every `BACKUP_EVERY_HOURS` hours (default 24, `0` = off) and keeps the newest `BACKUP_KEEP` (default 7). An administrator can also make and download one in the Admin app (Backups tab).
+- Backups do **not** contain uploaded files. Copy the `DATA_DIR/uploads` folder separately (and download the backup zip to your own computer, because a backup on the same disk does not survive losing the disk).
+- Restore: stop the server, then run `node scripts/restore.js <backup.zip> --yes` (`--data DIR` if `DATA_DIR` is not the default), copy `uploads` back if needed, and start the server. The old data files are kept in `before-restore-<time>/`. See "Backup and restore" in the README.
 
 ## 6. If the international internet is cut
 - Everything is served from your server; the page loads no third-party scripts, fonts or images.

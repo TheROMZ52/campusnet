@@ -1,5 +1,14 @@
 # Release notes
 
+## v0.13.0 - admin tools, account settings, backups
+- **Admin app** (administrators only, hidden from everyone else, every action re-checked on the server): users (search, suspend / restore, reset password with a one-time temporary password and a new encryption identity, delete with cleanup of files, messages, posts and owned groups), server status with **close / open registration**, and backups.
+- **Settings > Account:** change your password (the private-message key is re-locked with the new password instead of being replaced, so old private messages stay readable) and delete your own account (password required; administrators cannot delete theirs). After an administrator reset you are asked to choose a new password at sign-in.
+- **Backups:** automatic zip backups in `DATA_DIR/backups` (`BACKUP_EVERY_HOURS`, default 24, `0` = off; `BACKUP_KEEP`, default 7), manual backup and download from the Admin app, download only for administrators (`/f/backup/<name>`), and `scripts/restore.js` (stop the server first; old files are moved aside, not deleted). Backups do not include uploaded files: copy `DATA_DIR/uploads` separately.
+- New: `lib/zip.js` (zip writer and reader, no dependencies), Persian and English texts for all new screens.
+- Docs: README (Admin and backups, `BACKUP_*`), `DEPLOY.md` and `DEPLOY.fa.md` (backup, restore, copying `uploads`).
+- Tests: `npm test` 91 (13 new in `tests/admin.test.js`), `npm run test:e2e` 41 (9 new in `tests/e2e/admin.test.js`: Admin tile only for administrators, suspend / restore, reset password and temporary password then forced change, closing registration, backup download only for administrators, **private messages still readable after changing the password and signing in again**, wrong password / mismatch, deleting your own account). That last test was checked against a deliberately broken version (old key blob sent) and fails there.
+- Not done: restoring from the Admin window (use the script), backing up uploaded files, testing the Admin window on a phone-sized screen.
+
 ## v0.12.1 - debugging pass
 Found with static analysis (ESLint), a protocol fuzzer (about 25 000 hostile messages), an HTTP path/method/range probe and small-screen layout checks. Every fix below has a test that fails without it.
 - **Security: rate limits could be bypassed behind a proxy.** `TRUST_PROXY` used the *first* `X-Forwarded-For` entry, which a client can forge, so the per-address limits on sign-ups and logins could be sidestepped. It now counts trusted proxies from the end of the header (`TRUST_PROXY=1` one proxy, `2` two). See DEPLOY.md
