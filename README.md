@@ -29,6 +29,14 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Installable app and offline start (v0.14)
+CampusNet is a PWA: on a phone or desktop browser you can install it (Settings > **Install app**, or the browser's own "Install" / "Add to Home Screen") and it opens in its own window with its own icon.
+- **Offline start:** a service worker (`public/sw.js`) keeps the page, scripts, styles, fonts and icons on the device, so the app opens even with **no connection at all**. Chat itself still needs the server: offline you see the sign-in screen and the app reconnects when the network is back. Messages, files and calls are never cached by the worker.
+- **Needs HTTPS** (or `localhost`): browsers only allow service workers and installation in a secure context. On plain `http://` over a LAN the site works as before but cannot be installed.
+- **Updates:** the page is fetched from the network first (3.5 s limit, then the saved copy), so a new server version is picked up on the next load; a toast says when a new version is ready. The worker's cache is named after the version, so old files are removed.
+- The app name in the manifest follows `SITE_NAME`. On iPhone use Share > Add to Home Screen (Settings shows the steps).
+- Not done: push notifications and background sync (a browser tab cannot keep a connection in the background; the planned Android app will).
+
 ## Admin tools, accounts and backups (v0.13)
 Administrators (`ADMIN_USERS`) get an **Admin** app in the launcher (hidden for everyone else, and every action is checked again on the server) with three tabs:
 - **Users:** search, suspend / restore (the user is signed out and cannot sign in until restored), reset password, delete. A reset gives a one-time **temporary password** (shown once, hand it over in person) and a new encryption identity, so that user cannot read their old private messages; they are asked to choose a new password after signing in. Deleting removes the account, its files, posts, groups it owns and its private messages. Administrators cannot be suspended, reset or deleted from this window.
@@ -150,7 +158,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (91, no browser). `npm run test:e2e` (41 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (97, no browser). `npm run test:e2e` (47 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |
@@ -164,6 +172,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
 | `public/admin.js` | Admin window (users, server, backups) |
 | `lib/zip.js` | Small zip writer and reader used by backups |
 | `scripts/restore.js` | Restore a backup (stop the server first) |
+| `public/sw.js` | Service worker (offline app shell) |
+| `public/pwa.js` | Worker registration and install button |
 | `public/shell.js` | Desktop shell: windows, launcher, menubar, dock, system apps |
 | `public/demo.js` | Preview mode with a simulated network |
 | `Dockerfile` | Container build |

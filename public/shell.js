@@ -267,7 +267,10 @@
     const tog = (k, label) => { const l = el('label', 'tog'), i = el('input'); i.type = 'checkbox'; i.checked = prefs[k] !== false && !!prefs[k] || (k === 'boot' && prefs.boot !== false); i.onchange = () => { prefs[k] = i.checked; savePrefs(); applyPrefs(); }; l.append(el('span', null, label), i); return l; };
     const btn = (t, fn) => { const b = el('button', 'btn', t); b.type = 'button'; b.onclick = fn; return b; }, row = el('div', 'row');
     row.append(btn(tr('Reset window layout'), () => { if (os()) tile(); else toast(tr('Window layout applies on large screens')); }), btn(tr('Forget trusted keys'), async () => { if (await ask({ title: tr('Forget trusted keys'), text: tr('Safety numbers you saved on this device will be cleared. Contacts are checked again the next time you message them.'), ok: tr('Forget'), danger: true })) { forgetKeys(); toast(tr('Trusted keys cleared')); } }));
-    body.append(langRow(), tog('boot', tr('Boot animation after sign-in')), tog('crt', tr('CRT scanlines and vignette')), tog('mesh', tr('Animated network background')), tog('sound', tr('Sound alerts for DMs and mentions')), row, accountBox(), el('p', 'note', tr('Settings are stored in this browser only.')));
+    const inst = el('div', 'instbox'), ib = btn(tr('Install app'), () => { if (window.PWA) PWA.install(); }), ih = el('p', 'note');
+    const syncInst = () => { const k = window.PWA ? PWA.state() : 'none'; inst.hidden = k !== 'prompt' && k !== 'ios'; ib.hidden = k !== 'prompt'; ih.textContent = k === 'ios' ? tr('On iPhone: tap Share, then Add to Home Screen.') : tr('Install CampusNet on this device so it opens like an app and its screen loads even without a connection.'); };
+    inst.append(ib, ih); syncInst(); document.addEventListener('cn:pwa', () => { if (body.isConnected) syncInst(); });
+    body.append(langRow(), inst, tog('boot', tr('Boot animation after sign-in')), tog('crt', tr('CRT scanlines and vignette')), tog('mesh', tr('Animated network background')), tog('sound', tr('Sound alerts for DMs and mentions')), row, accountBox(), el('p', 'note', tr('Settings are stored in this browser only.')));
   }
 
   /* ---------- OS pieces: messages sidebar, start menu, lock screen, boot ---------- */

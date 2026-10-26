@@ -10,7 +10,7 @@ vm.createContext(box); vm.runInContext(read('i18n.js') + '\n;this.I18N = I18N;',
 const FA = box.I18N.dictFa, has = k => Object.prototype.hasOwnProperty.call(FA, k);
 const phs = s => (String(s).match(/\{(\w+)\}/g) || []).sort().join();
 const lit = src => new Function('return ' + src)();
-const CODE = ['app.js', 'shell.js', 'social.js', 'music.js', 'home.js'];
+const CODE = ['app.js', 'shell.js', 'social.js', 'music.js', 'home.js', 'pwa.js'];
 
 describe('i18n', () => {
   it('every tr()/trn() literal in the client code has a Persian entry', () => {

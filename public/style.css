@@ -568,3 +568,5 @@ html.fa .callbox{direction:rtl}
 .admin .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
 .acct{display:flex;flex-direction:column;gap:8px;margin-top:10px}.acct input{background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:var(--r);padding:6px 8px;font:13px var(--sans)}
 .acct .sh{margin:6px 0 0;font:700 12px var(--mono);color:var(--neon);text-transform:uppercase;letter-spacing:.06em}.acct .btn.bad{color:var(--bad)}
+
+.set .instbox{display:flex;flex-direction:column;gap:6px;margin:8px 0}.set .instbox[hidden],.set .instbox [hidden]{display:none}

@@ -204,7 +204,7 @@ function authToken(t) {
 }
 
 /* ---------- HTTP ---------- */
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
 const SEC = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()',
@@ -319,6 +319,11 @@ const validBlob = b => !!b && typeof b.s === 'string' && typeof b.iv === 'string
 const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h))((req, res) => {
   let url; try { url = new URL(req.url, 'http://x'); } catch { return json(res, 400, { error: 'bad url' }); }
   if (url.pathname === '/healthz') return json(res, 200, { ok: true, uptime: Math.round(process.uptime()), online: online().length });
+  if (url.pathname === '/manifest.webmanifest' && (req.method === 'GET' || req.method === 'HEAD')) {   // name follows SITE_NAME
+    const icon = (f, size, purpose) => ({ src: '/' + f, sizes: size + 'x' + size, type: 'image/png', purpose });
+    res.writeHead(200, { 'Content-Type': TYPES['.webmanifest'], 'Cache-Control': 'no-cache', ...SEC });
+    return res.end(req.method === 'HEAD' ? undefined : JSON.stringify({ id: '/', name: SITE, short_name: SITE.slice(0, 12), description: 'Private campus-style network: chat, groups, feed, music and voice calls.', start_url: '/', scope: '/', display: 'standalone', background_color: '#050706', theme_color: '#050706', icons: [icon('icon-192.png', 192, 'any'), icon('icon-512.png', 512, 'any'), icon('icon-maskable-512.png', 512, 'maskable')] }));
+  }
   if (url.pathname === '/api/info') return json(res, 200, { name: SITE, needCode: !!CODE, maxMB: Math.round(MAX_FILE / 1048576) });
   if (req.method === 'POST' && url.pathname === '/api/session') {   // sets the HttpOnly cookie used only for downloads/previews (token never goes in a URL)
     const s = authToken(req.headers['x-token']); if (!s) return json(res, 401, { error: 'not signed in' });

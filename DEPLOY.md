@@ -38,8 +38,10 @@ Voice calls relay audio through the server (about 16 KB/s per active call), so t
 4. `https://<your-address>/healthz` returns `{"ok":true,...}`.
 5. Try the same from a phone on mobile data.
 
+- HTTPS is also what makes the app installable and lets it open offline (service worker). Check it on the phone: the browser should offer "Install" or "Add to Home Screen".
+
 ## 5. Updating and backups
-- Update: build a new zip and upload it. Data stays as long as `DATA_DIR` is outside the uploaded folder.
+- Update: build a new zip and upload it. Users get the new version on their next page load (a toast says it is ready); the browser replaces the offline copy by itself. Data stays as long as `DATA_DIR` is outside the uploaded folder.
 - Backup: the server writes a zip of its data files to `DATA_DIR/backups` every `BACKUP_EVERY_HOURS` hours (default 24, `0` = off) and keeps the newest `BACKUP_KEEP` (default 7). An administrator can also make and download one in the Admin app (Backups tab).
 - Backups do **not** contain uploaded files. Copy the `DATA_DIR/uploads` folder separately (and download the backup zip to your own computer, because a backup on the same disk does not survive losing the disk).
 - Restore: stop the server, then run `node scripts/restore.js <backup.zip> --yes` (`--data DIR` if `DATA_DIR` is not the default), copy `uploads` back if needed, and start the server. The old data files are kept in `before-restore-<time>/`. See "Backup and restore" in the README.

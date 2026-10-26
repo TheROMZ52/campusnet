@@ -1,12 +1,12 @@
 {
   "name": "campusnet",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "A tiny campus-style intranet: public/private chat, file sharing and a live online list. Runs on a LAN or online.",
   "main": "server.js",
   "scripts": {
     "start": "node scripts/start.js",
-    "test": "node --test tests/server.test.js tests/social.test.js tests/groups.test.js tests/music.test.js tests/i18n.test.js tests/deploy.test.js tests/call.test.js tests/proxy.test.js tests/start.test.js tests/admin.test.js",
-    "test:e2e": "node --test --test-concurrency=2 tests/e2e/e2e.test.js tests/e2e/features.test.js tests/e2e/groups.test.js tests/e2e/v09.test.js tests/e2e/fa.test.js tests/e2e/call.test.js tests/e2e/layout.test.js tests/e2e/admin.test.js",
+    "test": "node --test tests/server.test.js tests/social.test.js tests/groups.test.js tests/music.test.js tests/i18n.test.js tests/deploy.test.js tests/call.test.js tests/proxy.test.js tests/start.test.js tests/admin.test.js tests/pwa.test.js",
+    "test:e2e": "node --test --test-concurrency=2 tests/e2e/e2e.test.js tests/e2e/features.test.js tests/e2e/groups.test.js tests/e2e/v09.test.js tests/e2e/fa.test.js tests/e2e/call.test.js tests/e2e/layout.test.js tests/e2e/admin.test.js tests/e2e/pwa.test.js",
     "pack": "node scripts/pack.js"
   },
   "engines": {

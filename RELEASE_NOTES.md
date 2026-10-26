@@ -1,5 +1,14 @@
 # Release notes
 
+## v0.14.0 - installable app, opens offline
+- **PWA:** web app manifest (served by the server so the name follows `SITE_NAME`), icons (192, 512, maskable, Apple touch, SVG), and a service worker (`public/sw.js`) that precaches the app shell. With no network the page opens styled and working (sign-in screen, language switch); chat reconnects when the network returns. The worker only answers listed shell files: uploads, downloads, range requests, `/api/*` and WebSocket traffic are never touched.
+- Page loads are network-first with a 3.5 s limit, then the saved copy; shell files come from the cache and refresh in the background. The cache name is `cn-<version>`, old caches are deleted on activation, and a toast says when a new version has taken over.
+- Settings > **Install app** (when the browser offers installation) and iPhone steps; Persian texts added.
+- Needs HTTPS or `localhost` (browser rule). Over plain `http://` on a LAN nothing changes and the app is not installable.
+- Docs: README (English and Persian), `DEPLOY.md` / `DEPLOY.fa.md` (HTTPS also enables install, how updates arrive). **Remember to bump `VERSION` in `public/sw.js` with every release**: a test fails if it differs from `package.json`.
+- Tests: `npm test` 97 (6 new in `tests/pwa.test.js`: manifest and icon sizes, every precached file is served, the precache covers every script/style/font the page loads, version match), `npm run test:e2e` 47 (6 new in `tests/e2e/pwa.test.js`: worker installs and fills the versioned cache, the page opens offline styled and interactive, it does not without the worker, signed-in offline reload has no script errors, install button appears only when offered and opens the prompt).
+- Not done: push notifications and background sync (needs the Android app), offline reading of old messages, testing installation on real phones and in Iranian networks.
+
 ## v0.13.0 - admin tools, account settings, backups
 - **Admin app** (administrators only, hidden from everyone else, every action re-checked on the server): users (search, suspend / restore, reset password with a one-time temporary password and a new encryption identity, delete with cleanup of files, messages, posts and owned groups), server status with **close / open registration**, and backups.
 - **Settings > Account:** change your password (the private-message key is re-locked with the new password instead of being replaced, so old private messages stay readable) and delete your own account (password required; administrators cannot delete theirs). After an administrator reset you are asked to choose a new password at sign-in.
