@@ -5,7 +5,7 @@ const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.classN
 const IS_DEMO = /[?&]demo\b/.test(location.search), pingWait = {};
 const st = { groups: {}, prefs: { following: [], blocked: [], muted: [], reads: {}, receipts: true }, profiles: {}, myProfile: { d: '', b: '', a: '' }, notifs: [], peerReads: {}, reply: null, editing: null, ws: null, me: '', token: sessionStorage.getItem('cn:token') || '', rooms: [], users: [], status: {}, all: [], hist: {}, dms: {}, notices: [], files: [], cur: { k: 'r', id: 'general' }, unread: {}, typing: {}, admin: false, maxMB: 100, retry: 0, mode: 'login', loginName: '', loginPw: '', loginCode: '', loginAdm: '' };
 st.lat = []; st.t0 = 0;
-let chain = Promise.resolve();
+let chain = Promise.resolve(), resumeTimer = 0;
 const key = c => c.k + ':' + c.id;
 const emitUI = k => document.dispatchEvent(new CustomEvent('cn:' + k));
 const hhmm = ts => { const d = new Date(ts); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -201,6 +201,7 @@ async function handle(m) {
   switch (m.t) {
     case 'welcome': {
       await setupKeys(m); const dmsDec = {}; for (const [o, arr] of Object.entries(m.dms || {})) { dmsDec[o] = []; for (const x of arr) dmsDec[o].push(await decDM(x, m.me)); }
+      clearTimeout(resumeTimer); resumeTimer = 0;
       const first = !st.me; if (first) st.t0 = Date.now();
       try { await fetch('/api/session', { method: 'POST', headers: { 'x-token': m.token } }); } catch { /* downloads need this cookie */ }
       st.me = m.me; st.token = m.token; sessionStorage.setItem('cn:token', m.token); sessionStorage.setItem('cn:name', m.me); document.body.classList.remove('resuming'); st.admin = m.admin; st.mode = 'login';
@@ -544,5 +545,12 @@ $('#unlockBar').onsubmit = async e => { e.preventDefault(); const i = $('#unlock
   let t = '', n = '';
   try { t = sessionStorage.getItem('cn:token') || ''; n = sessionStorage.getItem('cn:name') || ''; } catch { /* ignore */ }
   if (!t || !n || IS_DEMO) return;
-  st.resume = true; st.token = t; st.me = ''; st.loginName = n; st.loginPw = ''; st.mode = 'login'; document.body.classList.add('resuming'); connect();
+  st.resume = true; st.token = t; st.me = ''; st.loginName = n; st.loginPw = ''; st.mode = 'login'; document.body.classList.add('resuming');
+  resumeTimer = setTimeout(() => {
+    if (!st.resume) return;
+    endResume(tr('Session restore timed out. Please sign in again.'));
+    $('#app').hidden = true; $('#login').hidden = false; $('#linkbar').hidden = true; setBusy(false);
+    try { st.ws?.close(); } catch { /* ignore */ }
+  }, 12000);
+  connect();
 })();
