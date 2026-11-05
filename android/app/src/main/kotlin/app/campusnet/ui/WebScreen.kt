@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
@@ -18,6 +19,8 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.SslErrorHandler
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -117,6 +120,9 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
     var progress by remember { mutableIntStateOf(0) }
     var ready by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    var securityFailure by remember { mutableStateOf(false) }
+    var failureDetail by remember { mutableStateOf("") }
+    var failedUrl by remember { mutableStateOf(origin) }
     var menu by remember { mutableStateOf(false) }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -197,11 +203,36 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                             }
 
                             override fun onPageFinished(view: WebView, url: String?) {
+                                if (!failed) ready = true
+                            }
+
+                            override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                                handler.cancel()
+                                failedUrl = error.url?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: origin
+                                securityFailure = true
+                                failureDetail = ctx.getString(R.string.ssl_certificate_invalid)
                                 ready = true
+                                failed = true
+                            }
+
+                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                                if (request.isForMainFrame && response.statusCode >= 400) {
+                                    failedUrl = request.url.toString()
+                                    securityFailure = false
+                                    failureDetail = ctx.getString(R.string.http_error_code, response.statusCode)
+                                    ready = true
+                                    failed = true
+                                }
                             }
 
                             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                                if (request.isForMainFrame) failed = true
+                                if (request.isForMainFrame) {
+                                    failedUrl = request.url.toString()
+                                    securityFailure = false
+                                    failureDetail = error.description?.toString().orEmpty()
+                                    ready = true
+                                    failed = true
+                                }
                             }
                         }
                         webChromeClient = object : WebChromeClient() {
@@ -270,15 +301,40 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                 ) {
                     HexLogo(0.78f, 0.4f, Modifier.size(96.dp), Palette.Danger)
                     Spacer(Modifier.height(22.dp))
-                    Text(stringResource(R.string.connection_lost), color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(30.dp))
+                    Text(
+                        stringResource(if (securityFailure) R.string.security_error_title else R.string.connection_lost),
+                        color = Palette.Text,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(if (securityFailure) R.string.security_error_message else R.string.connection_error_message),
+                        color = Palette.Dim,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    if (failureDetail.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(failureDetail, color = Palette.Danger, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    }
+                    Spacer(Modifier.height(24.dp))
                     Pill(stringResource(R.string.retry), true) {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         failed = false
+                        securityFailure = false
+                        failureDetail = ""
+                        failedUrl = origin
                         ready = false
                         holder.web?.loadUrl(origin)
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Pill(stringResource(R.string.open_in_browser), false) {
+                        val target = Uri.parse(failedUrl)
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, target).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }
+                    Spacer(Modifier.height(10.dp))
                     Pill(stringResource(R.string.change_server), false, onChangeServer)
                 }
             }
