@@ -4,7 +4,7 @@ const Home = (function () {
   let body = null, timer = 0, posts = [], mini = null;
   const TILES = [['chat', tr('Messages'), 'chat'], ['feed', tr('Feed'), 'board'], ['groups', tr('Groups'), 'chat'], ['people', tr('People'), 'nodes'], ['music', tr('Music'), 'music'], ['files', tr('Files'), 'files'], ['terminal', tr('Terminal'), 'term'], ['security', tr('Security'), 'shield']];
   const sec = (t, ...kids) => { const s = el('section', 'hsec'); s.append(el('h3', 'sh', t), ...kids); return s; };
-  const row = (a, b, fn) => { const li = el('li'); li.append(el('b', null, a), el('small', null, b)); if (fn) { li.tabIndex = 0; li.onclick = fn; li.onkeydown = e => { if (e.key === 'Enter') fn(); }; } return li; };
+  const row = (a, b, fn) => { const li = el('li'); li.append(el('b', null, a), el('small', null, b)); if (fn) { li.tabIndex = 0; li.setAttribute('role', 'button'); li.setAttribute('aria-label', a); li.onclick = fn; li.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }; } return li; };
   const convLabel = k => { if (k === 'b:board') return tr('Board'); if (k.startsWith('r:g:')) return '\u25C7 ' + ((st.groups[k.slice(4)] || {}).name || 'group'); if (k.startsWith('r:')) return '#' + k.slice(2); return k.slice(2); };
   function go(k) { const kind = k[0], id = k.slice(2); open(kind === 'b' ? 'b' : kind, kind === 'b' ? 'board' : id); if (window.Shell) Shell.launch('chat'); }
   function render() {
