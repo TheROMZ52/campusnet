@@ -35,6 +35,42 @@ describe('layout on small screens', () => {
       assert.deepEqual(bad, []); await ctx.close();
     });
   }
+  it('keeps the mobile chat expanded and renders local commands', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage(), name = 'chatlayout';
+    page.on('pageerror', e => problems.push(e.message));
+    await page.goto(s.base + '/');
+    await page.click('#tabUp');
+    await page.fill('#nameIn', name);
+    await page.fill('#pwIn', PW);
+    await page.fill('#pw2In', PW);
+    await page.click('#goBtn');
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 });
+    const layout = await page.evaluate(() => {
+      const rect = selector => {
+        const r = document.querySelector(selector).getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, height: r.height };
+      };
+      return {
+        viewport: window.innerHeight,
+        app: rect('#app'),
+        main: rect('main'),
+        center: rect('#center'),
+        log: rect('#log'),
+        tabs: rect('#tabs')
+      };
+    });
+    assert.ok(layout.tabs.bottom >= layout.viewport - 4, 'mobile tabs stay at the bottom: ' + JSON.stringify(layout));
+    assert.ok(layout.main.height > 300, 'main area fills the viewport: ' + JSON.stringify(layout));
+    assert.ok(layout.center.height > 250, 'chat panel has usable height: ' + JSON.stringify(layout));
+    assert.ok(layout.log.height > 150, 'message log remains expanded: ' + JSON.stringify(layout));
+    await page.fill('#inp', '/help');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('#log .msg')].some(row => row.textContent.includes('/help')));
+    assert.ok(await page.locator('#log').innerText().then(t => t.includes('/help')), 'local /help output is visible');
+    await ctx.close();
+  });
+
   for (const height of [480, 568, 640]) {
     it(`login and register remain reachable at ${height}px viewport height`, async () => {
       const ctx = await browser.newContext({ viewport: { width: 360, height }, isMobile: true, hasTouch: true, locale: 'fa-IR' });
