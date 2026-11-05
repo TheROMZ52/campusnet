@@ -35,5 +35,24 @@ describe('layout on small screens', () => {
       assert.deepEqual(bad, []); await ctx.close();
     });
   }
+  for (const height of [480, 568, 640]) {
+    it(`login and register remain reachable at ${height}px viewport height`, async () => {
+      const ctx = await browser.newContext({ viewport: { width: 360, height }, isMobile: true, hasTouch: true, locale: 'fa-IR' });
+      const page = await ctx.newPage();
+      await page.goto(s.base + '/');
+      for (const mode of ['login', 'register']) {
+        if (mode === 'register') await page.click('#tabUp');
+        const metrics = await page.evaluate(() => {
+          const root = document.querySelector('#login');
+          return { client: root.clientHeight, scroll: root.scrollHeight, width: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+        });
+        assert.equal(metrics.width, 0, 'no horizontal overflow');
+        assert.ok(metrics.scroll >= metrics.client, 'login container can scroll vertically when needed');
+        await page.locator('#login').evaluate(node => { node.scrollTop = node.scrollHeight; });
+        assert.ok(await page.locator('#goBtn').isVisible(), `${mode} submit remains reachable`);
+      }
+      await ctx.close();
+    });
+  }
   it('no page errors', () => { assert.deepEqual(problems, []); });
 });
