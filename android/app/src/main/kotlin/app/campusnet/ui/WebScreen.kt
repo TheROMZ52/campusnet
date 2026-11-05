@@ -96,15 +96,37 @@ import app.campusnet.service.KeepAliveService
 private const val LOGIN_LAYOUT_PATCH = """
 (function () {
   var login = document.getElementById('login');
-  if (!login || document.getElementById('campusnet-android-login-layout')) return;
-  var style = document.createElement('style');
-  style.id = 'campusnet-android-login-layout';
-  style.textContent = [
-    '#login { display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:flex-start !important; flex:1 1 0 !important; min-height:0 !important; width:100% !important; overflow-x:hidden !important; overflow-y:auto !important; padding-top:12px !important; padding-bottom:12px !important; }',
-    '.gate { flex:0 0 auto !important; width:min(420px,100%) !important; max-height:none !important; overflow:visible !important; margin-top:auto !important; margin-bottom:auto !important; }',
-    '@media(max-height:700px) { .gate { padding:18px 18px 16px !important; gap:13px !important; } #loginForm { gap:10px !important; } }'
-  ].join('');
-  (document.head || document.documentElement).appendChild(style);
+  var gate = login && login.querySelector('.gate');
+  if (!login || !gate) return;
+  if (!document.getElementById('campusnet-android-login-layout-v2')) {
+    var style = document.createElement('style');
+    style.id = 'campusnet-android-login-layout-v2';
+    style.textContent = [
+      '#login { position:fixed !important; left:0 !important; right:0 !important; top:0 !important; z-index:20 !important; display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:flex-start !important; box-sizing:border-box !important; width:100% !important; min-width:0 !important; min-height:0 !important; max-height:none !important; overflow-x:hidden !important; overflow-y:auto !important; overscroll-behavior-y:contain !important; }',
+      '.gate { position:relative !important; flex:0 0 auto !important; width:min(420px,100%) !important; max-width:100% !important; max-height:none !important; overflow:visible !important; margin:0 auto !important; }',
+      '@media(max-height:700px) { .gate { padding:16px 16px 14px !important; gap:11px !important; } #loginForm { gap:9px !important; } .brand .logo { width:38px !important; height:38px !important; } .brand h1 { font-size:22px !important; } }'
+    ].join('');
+    (document.head || document.documentElement).appendChild(style);
+  }
+  function fitLogin() {
+    var viewport = window.visualViewport;
+    var height = Math.max(1, Math.round(viewport && viewport.height ? viewport.height : window.innerHeight));
+    var offsetTop = Math.max(0, Math.round(viewport && viewport.offsetTop ? viewport.offsetTop : 0));
+    login.style.top = offsetTop + 'px';
+    login.style.height = height + 'px';
+    login.style.paddingTop = '12px';
+    login.style.paddingBottom = '12px';
+    var gateHeight = Math.ceil(gate.getBoundingClientRect().height);
+    login.style.paddingTop = Math.max(12, Math.floor((height - gateHeight) / 2)) + 'px';
+  }
+  if (!login.dataset.cnLoginLayoutBound) {
+    login.dataset.cnLoginLayoutBound = '1';
+    window.addEventListener('resize', fitLogin, { passive:true });
+    window.addEventListener('orientationchange', fitLogin, { passive:true });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', fitLogin, { passive:true });
+  }
+  fitLogin();
+  setTimeout(fitLogin, 80);
 })();
 """
 
