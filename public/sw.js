@@ -2,7 +2,7 @@
 /* CampusNet service worker: the app shell (page, scripts, styles, fonts, icons) opens without a connection.
    Chat data is never cached here: uploads, downloads, WebSocket traffic and /api/* always go to the server.
    Change VERSION with every release (tests/pwa.test.js checks it equals package.json): a new VERSION installs a fresh cache. */
-const VERSION = '0.15.3', CACHE = 'cn-' + VERSION;
+const VERSION = '0.15.0', CACHE = 'cn-' + VERSION;
 const SHELL = ['/', '/style.css', '/net.js', '/crypto.js', '/demo.js', '/i18n.js', '/app.js', '/music.js', '/social.js', '/home.js', '/call.js', '/call-worklet.js',
   '/admin.js', '/shell.js', '/router.js', '/pwa.js', '/fonts/Vazirmatn-Regular.woff2', '/fonts/Vazirmatn-Bold.woff2', '/icon.svg', '/icon-192.png', '/icon-512.png',
   '/icon-maskable-512.png', '/apple-touch-icon.png', '/manifest.webmanifest'];
