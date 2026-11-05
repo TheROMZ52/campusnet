@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          gradle --no-daemon testDebugUnitTest assembleRelease 2>&1 | tee build.log
+          gradle --no-daemon testDebugUnitTest assembleRelease bundleRelease 2>&1 | tee build.log
       - name: Show errors
         if: failure()
         shell: bash {0}
@@ -82,6 +82,10 @@ jobs:
         with:
           name: CampusNet-v${{ steps.apk.outputs.version }}
           path: android/${{ steps.apk.outputs.apk_name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CampusNet-v${{ steps.apk.outputs.version }}-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
       - name: Publish versioned release and update rolling channel
         env:
           GH_TOKEN: ${{ github.token }}
