@@ -102,6 +102,7 @@ private const val LOGIN_LAYOUT_PATCH = """
     var style = document.createElement('style');
     style.id = 'campusnet-android-login-layout-v2';
     style.textContent = [
+      '#login[hidden] { display:none !important; visibility:hidden !important; pointer-events:none !important; }',
       '#login { position:fixed !important; left:0 !important; right:0 !important; top:0 !important; z-index:20 !important; display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:flex-start !important; box-sizing:border-box !important; width:100% !important; min-width:0 !important; min-height:0 !important; max-height:none !important; overflow-x:hidden !important; overflow-y:auto !important; overscroll-behavior-y:contain !important; }',
       '.gate { position:relative !important; flex:0 0 auto !important; width:min(420px,100%) !important; max-width:100% !important; max-height:none !important; overflow:visible !important; margin:0 auto !important; }',
       '@media(max-height:700px) { .gate { padding:16px 16px 14px !important; gap:11px !important; } #loginForm { gap:9px !important; } .brand .logo { width:38px !important; height:38px !important; } .brand h1 { font-size:22px !important; } }'
