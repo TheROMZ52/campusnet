@@ -124,9 +124,19 @@ private const val LOGIN_LAYOUT_PATCH = """
     login.dataset.cnLoginLayoutBound = '1';
     window.addEventListener('resize', fitLogin, { passive:true });
     window.addEventListener('orientationchange', fitLogin, { passive:true });
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', fitLogin, { passive:true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', fitLogin, { passive:true });
+      window.visualViewport.addEventListener('scroll', fitLogin, { passive:true });
+    }
+    if (window.ResizeObserver) new ResizeObserver(fitLogin).observe(gate);
+    new MutationObserver(function () { requestAnimationFrame(fitLogin); }).observe(gate, { childList:true, subtree:true, attributes:true });
+    gate.addEventListener('transitionend', fitLogin);
+    gate.addEventListener('animationend', fitLogin);
+    document.addEventListener('focusin', function () { requestAnimationFrame(fitLogin); });
+    document.addEventListener('focusout', function () { requestAnimationFrame(fitLogin); });
   }
   fitLogin();
+  requestAnimationFrame(fitLogin);
   setTimeout(fitLogin, 80);
 })();
 """
@@ -275,8 +285,24 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                                     failed = true
                                 }
                             }
+
+                            override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                                failedUrl = origin
+                                securityFailure = false
+                                failureDetail = "WebView renderer stopped (crashed=${detail.didCrash()})"
+                                ready = true
+                                failed = true
+                                holder.web = null
+                                view.destroy()
+                                return true
+                            }
                         }
                         webChromeClient = object : WebChromeClient() {
+                            override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                                android.util.Log.d("CampusNetWeb", "${message.message()} -- ${message.sourceId()}:${message.lineNumber()}")
+                                return true
+                            }
+
                             override fun onProgressChanged(view: WebView, newProgress: Int) {
                                 progress = newProgress
                             }
