@@ -25,13 +25,22 @@ jobs:
           gradle --no-daemon testDebugUnitTest assembleRelease 2>&1 | tee build.log
       - name: Show errors
         if: failure()
-        shell: bash
+        shell: bash {0}
         run: |
-          L=$( (grep -E "^e: |What went wrong|Execution failed|Could not|Unresolved reference|AAPT|Duplicate|FAILED" build.log || true) | sed 's#file:///home/runner/work/campusnet/campusnet/android/##' | head -60 | cut -c1-240 | awk '{printf "%s%%0A", $0}')
-          T=$(tail -n 40 build.log | cut -c1-200 | awk '{printf "%s%%0A", $0}')
-          echo "::error title=gradle-errors::$L"
-          echo "::error title=gradle-tail::$T"
-          exit 0
+          ls -la > ls.txt
+          python3 - <<'PY'
+          import os, re
+          def emit(title, lines):
+              print("::error title=%s::%s" % (title, "%0A".join(l[:240].replace("\r", "") for l in lines)))
+          if not os.path.exists("build.log"):
+              emit("no-build-log", open("ls.txt").read().splitlines()[:30])
+          else:
+              log = open("build.log", errors="replace").read().splitlines()
+              pat = re.compile(r"^e: |What went wrong|Execution failed|Could not|Unresolved reference|AAPT|Duplicate|FAILED|error:")
+              hits = [l.replace("file:///home/runner/work/campusnet/campusnet/android/", "") for l in log if pat.search(l)]
+              emit("gradle-errors", hits[:60])
+              emit("gradle-tail", log[-40:])
+          PY
       - run: cp app/build/outputs/apk/release/app-release.apk CampusNet.apk
       - uses: actions/upload-artifact@v4
         with: { name: CampusNet-apk, path: android/CampusNet.apk }
