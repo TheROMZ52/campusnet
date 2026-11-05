@@ -41,14 +41,45 @@ jobs:
               emit("gradle-errors", hits[:60])
               emit("gradle-tail", log[-40:])
           PY
-      - run: cp app/build/outputs/apk/release/app-release.apk CampusNet.apk
+      - name: Prepare versioned APK
+        id: apk
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read versionName from app/build.gradle.kts"
+            exit 1
+          fi
+          APK_NAME="CampusNet-v${VERSION}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
-        with: { name: CampusNet-apk, path: android/CampusNet.apk }
-      - name: Publish APK
+        with:
+          name: CampusNet-v${{ steps.apk.outputs.version }}
+          path: android/${{ steps.apk.outputs.apk_name }}
+      - name: Publish versioned release and update rolling channel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=android-dev; PRE=--prerelease
-          if [ "$GITHUB_REF_NAME" = main ]; then TAG=android-latest; PRE=; fi
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" $PRE --target "$GITHUB_SHA" --title "CampusNet Android ($TAG)" --notes "Latest APK built from $GITHUB_REF_NAME"
-          gh release upload "$TAG" CampusNet.apk --clobber
+          VERSION="${{ steps.apk.outputs.version }}"
+          APK_NAME="${{ steps.apk.outputs.apk_name }}"
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            VERSION_TAG="v${VERSION}"
+            CHANNEL_TAG="android-latest"
+            PRE=""
+          else
+            VERSION_TAG="android-v${VERSION}"
+            CHANNEL_TAG="android-dev"
+            PRE="--prerelease"
+          fi
+
+          if ! gh release view "$VERSION_TAG" >/dev/null 2>&1; then
+            gh release create "$VERSION_TAG" $PRE --target "$GITHUB_SHA" --title "CampusNet Android v${VERSION}" --notes "Version v${VERSION} built from $GITHUB_REF_NAME at $GITHUB_SHA."
+          fi
+          gh release upload "$VERSION_TAG" "$APK_NAME" --clobber
+
+          if ! gh release view "$CHANNEL_TAG" >/dev/null 2>&1; then
+            gh release create "$CHANNEL_TAG" $PRE --target "$GITHUB_SHA" --title "CampusNet Android ($CHANNEL_TAG)" --notes "Rolling channel. Versioned APK assets are retained for previous releases."
+          fi
+          gh release upload "$CHANNEL_TAG" "$APK_NAME" --clobber
