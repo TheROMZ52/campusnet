@@ -2,7 +2,7 @@
 /* CampusNet service worker: the app shell (page, scripts, styles, fonts, icons) opens without a connection.
    Chat data is never cached here: uploads, downloads, WebSocket traffic and /api/* always go to the server.
    Change VERSION with every release (tests/pwa.test.js checks it equals package.json): a new VERSION installs a fresh cache. */
-const VERSION = '0.15.0', CACHE = 'cn-' + VERSION;
+const VERSION = '0.15.3', CACHE = 'cn-' + VERSION;
 const SHELL = ['/', '/style.css', '/net.js', '/crypto.js', '/demo.js', '/i18n.js', '/app.js', '/music.js', '/social.js', '/home.js', '/call.js', '/call-worklet.js',
   '/admin.js', '/shell.js', '/router.js', '/pwa.js', '/fonts/Vazirmatn-Regular.woff2', '/fonts/Vazirmatn-Bold.woff2', '/icon.svg', '/icon-192.png', '/icon-512.png',
   '/icon-maskable-512.png', '/apple-touch-icon.png', '/manifest.webmanifest'];
@@ -24,12 +24,16 @@ async function navigate(req) {
     return res;
   } catch (err) { return (await cached()) || Response.error(); }
 }
-/* shell files: answer from the cache and refresh it in the background */
+/* shell files: prefer the network so an installed PWA does not stay on stale assets; keep cache as offline fallback */
 async function shellFile(e) {
-  const c = await caches.open(CACHE), hit = await c.match(e.request, { ignoreSearch: true });
-  const fresh = fetch(e.request).then(res => { if (res.ok) c.put(e.request, res.clone()); return res; });
-  if (hit) { e.waitUntil(fresh.catch(() => {})); return hit; }
-  return fresh;
+  const c = await caches.open(CACHE);
+  try {
+    const response = await fetch(e.request);
+    if (response.ok) await c.put(e.request, response.clone());
+    return response;
+  } catch {
+    return (await c.match(e.request, { ignoreSearch: true })) || Response.error();
+  }
 }
 self.addEventListener('fetch', e => {
   const r = e.request; if (r.method !== 'GET' || r.headers.has('range')) return;
