@@ -3,7 +3,7 @@
    Below that width the existing tabbed layout is used and extra apps open full screen.
    Shares globals with app.js (st, E2E, $, el, icon, send, open, setTab, toast, ask, prefs ...). */
 (function () {
-  const mq = matchMedia('(min-width:1180px)'), LS = 'cn:wm', desk = $('#desk');
+  const mq = matchMedia('(min-width:1180px) and (hover: hover) and (pointer: fine)'), LS = 'cn:wm', desk = $('#desk');
   const os = () => document.body.classList.contains('os');
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const APPS = {
