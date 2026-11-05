@@ -29,6 +29,14 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
+## Android app (v0.15)
+`android/` holds a native Kotlin / Jetpack Compose app that opens any CampusNet server: type the address once (`192.168.1.5:3000`, a domain, with or without `http://`), tap Connect, and from then on the app opens straight into the site.
+- Recent servers appear as chips; back from the first page offers **Change server** or **Exit**.
+- A foreground service (with a quiet "Connected" notification) keeps the connection alive in the background, and messages that arrive while the app is not on screen become real Android notifications (the text is decrypted by the page, the server never sees it). The first launch asks for notification permission and for exemption from battery optimisation.
+- Voice calls (microphone permission), file upload and download, music and the whole E2EE chat work as in the browser; links to other sites open in the phone's browser.
+- The APK is built by GitHub Actions (`.github/workflows/android.yml`): download `CampusNet.apk` from the **android-latest** release (main) or **android-dev** (other branches). It is signed with the key in `android/app/campusnet.jks` (password in `app/build.gradle.kts`): fine for sideloading to your own phones, not for a public store release. Build locally with Gradle 8.10 and JDK 17: `cd android && gradle assembleRelease`.
+- Not done: self-signed HTTPS certificates are rejected (use plain HTTP on the LAN or a real certificate), and the app has not been tested on a range of phones yet.
+
 ## Installable app and offline start (v0.14)
 CampusNet is a PWA: on a phone or desktop browser you can install it (Settings > **Install app**, or the browser's own "Install" / "Add to Home Screen") and it opens in its own window with its own icon.
 - **Offline start:** a service worker (`public/sw.js`) keeps the page, scripts, styles, fonts and icons on the device, so the app opens even with **no connection at all**. Chat itself still needs the server: offline you see the sign-in screen and the app reconnects when the network is back. Messages, files and calls are never cached by the worker.
@@ -158,7 +166,7 @@ Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (
 
 ## Tests
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
-`npm test` runs the server integration tests (97, no browser). `npm run test:e2e` (47 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
+`npm test` runs the server integration tests (97, no browser). `npm run test:e2e` (49 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
 ## Files
 | File | Purpose |
@@ -172,6 +180,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
 | `public/admin.js` | Admin window (users, server, backups) |
 | `lib/zip.js` | Small zip writer and reader used by backups |
 | `scripts/restore.js` | Restore a backup (stop the server first) |
+| `android/` | Native Android app (Kotlin, Compose) |
 | `public/sw.js` | Service worker (offline app shell) |
 | `public/pwa.js` | Worker registration and install button |
 | `public/shell.js` | Desktop shell: windows, launcher, menubar, dock, system apps |

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">CampusNet</string>
+    <string name="connect">Connect</string>
+    <string name="address_hint" translatable="false">192.168.1.5:3000</string>
+    <string name="err_invalid">Invalid address</string>
+    <string name="err_unreachable">Can\'t reach the server</string>
+    <string name="err_not_campusnet">This is not a CampusNet server</string>
+    <string name="retry">Retry</string>
+    <string name="change_server">Change server</string>
+    <string name="exit">Exit</string>
+    <string name="connection_lost">Connection failed</string>
+    <string name="connected">Connected</string>
+    <string name="channel_connection">Connection</string>
+    <string name="channel_messages">Messages</string>
+</resources>

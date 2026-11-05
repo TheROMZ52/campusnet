@@ -76,3 +76,26 @@ describe('v0.14: installable app and offline shell', () => {
 
   it('no page errors', () => { assert.deepEqual(problems, []); });
 });
+
+describe('v0.15: running inside the Android app', () => {
+  let s, browser; const problems = [];
+  before(async () => { s = await startServer(); browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, args: ['--no-sandbox'] }); });
+  after(async () => { await browser?.close(); s?.stop(); });
+  const signup = async (ctx, name) => { const page = await ctx.newPage(); page.on('pageerror', e => problems.push(e.message)); await page.goto(s.base + '/'); await page.click('#tabUp'); await page.fill('#nameIn', name); await page.fill('#pwIn', PW); await page.fill('#pw2In', PW); await page.click('#goBtn'); await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 }); return page; };
+
+  it('the app user agent turns off the service worker and the install button', async () => {
+    const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 Chrome/120 CampusNetApp/0.15.0' }); const page = await signup(ctx, 'inapp');
+    assert.equal(await page.evaluate(() => PWA.state()), 'installed'); assert.equal(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length), 0);
+    await ctx.close();
+  });
+  it('a private message that arrives while the app is in the background is handed to the native notification bridge, decrypted', async () => {
+    const a = await browser.newContext(), b = await browser.newContext();
+    await a.addInitScript(() => { window.__notes = []; window.CampusNetApp = { notify: (t, x) => window.__notes.push([t, x]) }; Object.defineProperty(Document.prototype, 'hidden', { get: () => true }); });
+    const pa = await signup(a, 'ana'), pb = await signup(b, 'bob');
+    await pb.locator('#launcher button[aria-label="Open Messages"]').click(); await pb.locator('#users li', { hasText: 'ana' }).first().click();
+    await pb.fill('#inp', 'hello from the other side'); await pb.keyboard.press('Enter');
+    await pa.waitForFunction(() => window.__notes.length > 0, null, { timeout: 15000 });
+    assert.deepEqual(await pa.evaluate(() => window.__notes[0]), ['bob', 'hello from the other side']);
+    await a.close(); await b.close(); assert.deepEqual(problems, []);
+  });
+});

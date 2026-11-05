@@ -1,5 +1,14 @@
 # Release notes
 
+## v0.15.0 - Android app
+- **Native Android app** in `android/` (Kotlin, Jetpack Compose, minSdk 26): animated intro (the hexagon draws itself over a drifting network), address field that accepts `ip:port`, domain or full URL (LAN addresses default to `http`, domains try `https` then `http`), connect button that morphs into a spinner and a check mark, shake on errors, expanding ring into the site. After the first connection the app opens straight into the site; recent servers are chips; back from the first page offers Change server / Exit. Persian and English.
+- WebView host: microphone permission for calls, file chooser for uploads, downloads through the system download manager with the session cookie, links to other sites open in the browser, offline/error screen with Retry.
+- Background: foreground service with a quiet notification plus a partial wake lock keeps the connection open; first launch asks for notification permission and battery-optimisation exemption. Messages that arrive while the app is not visible become Android notifications.
+- Web side: `window.CampusNetApp.notify(title, text)` is called for DMs and mentions while the page is hidden (decrypted text, sender as title); inside the app (`CampusNetApp` in the user agent) the service worker and the Install button are off. Server and web version bumped to 0.15.0 (`public/sw.js` too).
+- CI: `.github/workflows/android.yml` runs the Android unit tests (address parsing) and builds a signed release APK, published as `CampusNet.apk` on the `android-latest` (main) or `android-dev` release.
+- Tests: `npm test` 97, `npm run test:e2e` 49 (2 new in `tests/e2e/pwa.test.js`: in-app user agent disables the worker and install button; a DM received while hidden reaches the native bridge decrypted). Android: 8 unit tests for address handling.
+- Not done / unverified: the app has been compiled and tested only by CI, not yet run on a real phone: animations, background survival with the screen off, battery use, voice calls and uploads need a real-device pass. Self-signed HTTPS is rejected. The signing key is committed (sideloading only).
+
 ## v0.14.0 - installable app, opens offline
 - **PWA:** web app manifest (served by the server so the name follows `SITE_NAME`), icons (192, 512, maskable, Apple touch, SVG), and a service worker (`public/sw.js`) that precaches the app shell. With no network the page opens styled and working (sign-in screen, language switch); chat reconnects when the network returns. The worker only answers listed shell files: uploads, downloads, range requests, `/api/*` and WebSocket traffic are never touched.
 - Page loads are network-first with a 3.5 s limit, then the saved copy; shell files come from the cache and refresh in the background. The cache name is `cn-<version>`, old caches are deleted on activation, and a toast says when a new version has taken over.

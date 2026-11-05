@@ -55,6 +55,7 @@ function ask({ title, text, ok = tr('Confirm'), danger = false }) {
   });
 }
 let actx;
+function appNotify(title, text) { try { if (document.hidden && window.CampusNetApp && CampusNetApp.notify) CampusNetApp.notify(String(title), String(text || '').slice(0, 200)); } catch {} }
 function beep(f = 660) { if (!prefs.sound) return; try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = f; g.gain.value = 0.04; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.08); } catch { /* ignore */ } }
 
 /* ---------- rich text: safe links and @mentions (DOM nodes only) ---------- */
@@ -220,7 +221,7 @@ async function handle(m) {
     case 'notices': { const more = m.notices.length > st.notices.length; st.notices = m.notices; if (st.cur.k === 'b') renderLog(); else if (more) { st.unread['b:board'] = (st.unread['b:board'] || 0) + 1; renderRooms(); tabBadges(); toast(tr('New notice on the board'), 'warn'); } break; }
     case 'msg': if (!st.hist[m.m.room] || st.hist[m.m.room].some(x => x.id === m.m.id) || (m.m.kind !== 'sys' && isBlocked(m.m.from))) break; (st.hist[m.m.room] = st.hist[m.m.room] || []).push(m.m); clearTyping('r:' + m.m.room, m.m.from); incoming('r:' + m.m.room, m.m, m.m.from); break;
     case 'delmsg': { const a = st.hist[m.room]; if (a) { const i = a.findIndex(x => x.id === m.id); if (i >= 0) a.splice(i, 1); } const row = document.querySelector(`.msg[data-id="${CSS.escape(m.id)}"]`); if (row) row.remove(); break; }
-    case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other) && !isMuted('d:' + other)) beep(); break; }
+    case 'dm': { if ((st.dms[m.m.from === st.me ? m.m.to : m.m.from] || []).some(x => x.id === m.m.id)) break; const dm = await decDM(m.m), other = dm.from === st.me ? dm.to : dm.from; (st.dms[other] = st.dms[other] || []).push(dm); clearTyping('d:' + other, dm.from); incoming('d:' + other, dm, dm.from); if (dm.from !== st.me && (document.hidden || key(st.cur) !== 'd:' + other) && !isMuted('d:' + other)) { beep(); appNotify(dm.from, dm.text); } break; }
     case 'key': { E2E.keys[m.name] = m.pub; delete E2E.shared[m.name]; delete E2E.state[m.name]; if (m.name !== st.me) CN.fingerprint(m.pub).then(fp => { const t = tofu[m.name]; if (t && t.fp !== fp) { E2E.state[m.name] = 'changed'; E2E.pending[m.name] = fp; toast(tr('Safety number of {name} changed', { name: m.name }), 'warn', 7000); } emitUI('state'); e2eBadge(); }); break; }
     case 'pong': { const w = pingWait[m.id]; if (w) { delete pingWait[m.id]; w.res(Math.round(performance.now() - w.t0)); } break; }
     case 'group': { addGroup(m.g); renderRooms(); if (key(st.cur) === 'r:g:' + m.g.id) { renderLog(); renderPins(); } break; }
@@ -255,7 +256,7 @@ function incoming(k, msg, from) {
   const mention = msg.kind !== 'sys' && from !== st.me && new RegExp('@' + st.me.replace(/\./g, '\\.') + '(?![\\p{L}\\p{N}_.-])', 'iu').test(msg.text || '');
   if (key(st.cur) === k) { const stick = nearBottom(); addRow(msg); if (stick) scrollEnd(); markRead(); }
   else if (from !== st.me && msg.kind !== 'sys' && !isMuted(k)) { st.unread[k] = (st.unread[k] || 0) + 1; renderRooms(); renderUsers(); tabBadges(); }
-  if (mention && (document.hidden || key(st.cur) !== k) && !isMuted(k)) beep(880);
+  if (mention && (document.hidden || key(st.cur) !== k) && !isMuted(k)) { beep(880); appNotify(from, msg.text); }
   updateTitle();
 }
 function updateTitle() { const n = Object.values(st.unread).reduce((a, b) => a + b, 0); document.title = (n ? `(${n}) ` : '') + $('#siteBar').textContent; }
