@@ -10,6 +10,12 @@
     <string name="change_server">Change server</string>
     <string name="exit">Exit</string>
     <string name="connection_lost">Connection failed</string>
+    <string name="connection_error_message">The page could not be loaded. Check your connection and try again.</string>
+    <string name="security_error_title">Security certificate error</string>
+    <string name="security_error_message">The site certificate could not be verified. CampusNet blocked this connection for your safety.</string>
+    <string name="ssl_certificate_invalid">Untrusted or invalid HTTPS certificate.</string>
+    <string name="http_error_code">HTTP error: %1$d</string>
+    <string name="open_in_browser">Open in browser</string>
     <string name="connected">Connected</string>
     <string name="channel_connection">Connection</string>
     <string name="channel_messages">Messages</string>
