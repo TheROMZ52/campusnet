@@ -69,6 +69,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -172,6 +173,7 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
     var failureDetail by remember { mutableStateOf("") }
     var failedUrl by remember { mutableStateOf(origin) }
     var menu by remember { mutableStateOf(false) }
+    var generation by remember { mutableIntStateOf(0) }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val req = holder.mic
@@ -210,7 +212,8 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
 
     Box(Modifier.fillMaxSize().background(Palette.Bg)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))) {
-            AndroidView(
+            key(generation) {
+                AndroidView(
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (failed) 0f else 1f },
                 factory = { c ->
                     WebView(c).apply {
@@ -299,7 +302,9 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                         }
                         webChromeClient = object : WebChromeClient() {
                             override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
-                                android.util.Log.d("CampusNetWeb", "${message.message()} -- ${message.sourceId()}:${message.lineNumber()}")
+                                if (BuildConfig.DEBUG) {
+                                    android.util.Log.d("CampusNetWeb", "${message.message()} -- ${message.sourceId()}:${message.lineNumber()}")
+                                }
                                 return true
                             }
 
@@ -340,7 +345,8 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                         loadUrl(origin)
                     }
                 },
-            )
+                )
+            }
         }
 
         val bar by animateFloatAsState(progress / 100f, tween(250), label = "progress")
@@ -394,7 +400,8 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                         failureDetail = ""
                         failedUrl = origin
                         ready = false
-                        holder.web?.loadUrl(origin)
+                        val web = holder.web
+                        if (web == null) generation++ else web.loadUrl(origin)
                     }
                     Spacer(Modifier.height(10.dp))
                     Pill(stringResource(R.string.open_in_browser), false) {
