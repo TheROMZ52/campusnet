@@ -8,6 +8,12 @@
     <string name="change_server">تغییر سرور</string>
     <string name="exit">خروج</string>
     <string name="connection_lost">اتصال برقرار نشد</string>
+    <string name="connection_error_message">صفحه بارگذاری نشد. اتصال را بررسی کن و دوباره تلاش کن.</string>
+    <string name="security_error_title">خطای گواهی امنیتی</string>
+    <string name="security_error_message">اعتبار گواهی سایت تأیید نشد. CampusNet برای حفظ امنیت، اتصال را مسدود کرد.</string>
+    <string name="ssl_certificate_invalid">گواهی HTTPS نامعتبر یا غیرقابل اعتماد است.</string>
+    <string name="http_error_code">خطای HTTP: %1$d</string>
+    <string name="open_in_browser">باز کردن در مرورگر</string>
     <string name="connected">متصل</string>
     <string name="channel_connection">اتصال</string>
     <string name="channel_messages">پیام‌ها</string>
