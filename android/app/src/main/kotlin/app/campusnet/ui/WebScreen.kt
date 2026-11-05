@@ -93,6 +93,21 @@ import app.campusnet.bridge.AppBridge
 import app.campusnet.data.ServerStore
 import app.campusnet.service.KeepAliveService
 
+private const val LOGIN_LAYOUT_PATCH = """
+(function () {
+  var login = document.getElementById('login');
+  if (!login || document.getElementById('campusnet-android-login-layout')) return;
+  var style = document.createElement('style');
+  style.id = 'campusnet-android-login-layout';
+  style.textContent = [
+    '#login { display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:flex-start !important; flex:1 1 0 !important; min-height:0 !important; width:100% !important; overflow-x:hidden !important; overflow-y:auto !important; padding-top:12px !important; padding-bottom:12px !important; }',
+    '.gate { flex:0 0 auto !important; width:min(420px,100%) !important; max-height:none !important; overflow:visible !important; margin-top:auto !important; margin-bottom:auto !important; }',
+    '@media(max-height:700px) { .gate { padding:18px 18px 16px !important; gap:13px !important; } #loginForm { gap:10px !important; } }'
+  ].join('');
+  (document.head || document.documentElement).appendChild(style);
+})();
+"""
+
 private class Holder {
     var web: WebView? = null
     var mic: PermissionRequest? = null
@@ -203,7 +218,10 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                             }
 
                             override fun onPageFinished(view: WebView, url: String?) {
-                                if (!failed) ready = true
+                                if (!failed) {
+                                    view.evaluateJavascript(LOGIN_LAYOUT_PATCH, null)
+                                    ready = true
+                                }
                             }
 
                             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
