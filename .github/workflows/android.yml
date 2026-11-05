@@ -27,7 +27,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          grep -nE "^e: |^w: .*(Unresolved|Overload)|error:|What went wrong|Execution failed|Could not|Unresolved reference|FAILED|AAPT|Duplicate|> Task .* FAILED|^\s+> " build.log | head -60 | while IFS= read -r l; do echo "::error::${l:0:380}"; done
+          L=$(grep -E "^e: |error:|What went wrong|Execution failed|Could not|Unresolved reference|AAPT|Duplicate|FAILED" build.log | sed 's#file:///home/runner/work/campusnet/campusnet/android/##' | head -70 | cut -c1-260 | awk '{printf "%s%%0A", $0}')
+          echo "::error title=gradle::$L"
       - run: cp app/build/outputs/apk/release/app-release.apk CampusNet.apk
       - uses: actions/upload-artifact@v4
         with: { name: CampusNet-apk, path: android/CampusNet.apk }
