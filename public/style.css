@@ -109,8 +109,9 @@ select option{background:#0a100c;color:var(--text)}
 .row{display:flex;gap:10px;justify-content:flex-end}
 
 /* 4 ---- gate ---- */
-#login{flex:1 1 auto;min-height:0;min-width:0;display:grid;place-items:safe center;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b));overflow-y:auto;overscroll-behavior:contain}
-.gate{width:min(420px,100%);max-height:100%;overflow-y:auto;overscroll-behavior:contain;padding:26px 24px 22px;gap:18px;animation:rise .5s var(--ease) both}
+#login{flex:1 1 0;min-height:0;min-width:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b));overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain}
+.gate{flex:0 0 auto;width:min(420px,100%);max-height:none;overflow:visible;margin-block:auto;padding:26px 24px 22px;gap:18px;animation:rise .5s var(--ease) both}
+@media (max-height:700px){#login{padding-top:12px;padding-bottom:12px}.gate{padding:18px 18px 16px;gap:13px}#loginForm{gap:10px}.brand .logo{width:40px;height:40px}.brand h1{font-size:23px}}
 .brand{display:flex;align-items:center;gap:14px;color:var(--neon)}
 .brand h1{font:700 26px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text);text-shadow:0 0 18px rgba(51,255,102,.45)}
 .brand .sub{font:11px var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--neon);margin-top:6px}
