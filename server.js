@@ -62,8 +62,8 @@ function tlsOptions() {
 }
 const TLS = tlsOptions();
 const PANEL_ASSIGNED_PORT = process.env.CAMPUSNET_HOSTED === '1' || (process.env.CAMPUSNET_HOSTED !== '0' && process.env.PORT !== undefined);
-const HTTPS_PORT = TLS ? num('HTTPS_PORT', PANEL_ASSIGNED_PORT ? 0 : (PORT === 0 ? 0 : 3443), 0) : null;
-if (TLS && PORT !== 0 && HTTPS_PORT !== 0 && PORT === HTTPS_PORT) bail('PORT and HTTPS_PORT must be different when both protocols are enabled.');
+const HTTPS_PORT = TLS ? (PANEL_ASSIGNED_PORT && process.env.HTTPS_PORT === undefined ? null : num('HTTPS_PORT', PORT === 0 ? 0 : 3443, 0)) : null;
+if (TLS && HTTPS_PORT !== null && PORT !== 0 && HTTPS_PORT !== 0 && PORT === HTTPS_PORT) bail('PORT and HTTPS_PORT must be different when both protocols are enabled.');
 
 /* ---------- persistence: atomic writes, .bak fallback, corrupt files are preserved ---------- */
 function rd(f, d) {
@@ -355,7 +355,7 @@ const requestHandler = (req, res) => {
   });
 };
 const httpServer = http.createServer(requestHandler);
-const httpsServer = TLS ? https.createServer(TLS, requestHandler) : null;
+const httpsServer = TLS && HTTPS_PORT !== null ? https.createServer(TLS, requestHandler) : null;
 const servers = [httpServer, ...(httpsServer ? [httpsServer] : [])];
 for (const srv of servers) { srv.requestTimeout = 0; srv.headersTimeout = 30000; srv.keepAliveTimeout = 5000; }
 
