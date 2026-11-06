@@ -71,6 +71,22 @@ describe('layout on small screens', () => {
     await ctx.close();
   });
 
+  it('chat still fills the screen on a WebView without dvh support', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 766 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage(), name = 'nodvh';
+    page.on('pageerror', e => problems.push(e.message));
+    await page.route('**/style.css', async route => { const res = await route.fetch(); await route.fulfill({ response: res, body: (await res.text()).replace(/(min-)?height:100dvh;?/g, '') }); });
+    await page.goto(s.base + '/');
+    await page.click('#tabUp'); await page.fill('#nameIn', name); await page.fill('#pwIn', PW); await page.fill('#pw2In', PW); await page.click('#goBtn');
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 });
+    const m = await page.evaluate(() => { const r = q => document.querySelector(q).getBoundingClientRect(); return { vh: innerHeight, app: r('#app').height, desk: r('#desk').height, log: r('#log').height, tabsBottom: r('#tabs').bottom, over: document.documentElement.scrollWidth - innerWidth }; });
+    assert.ok(m.app >= m.vh - 2, 'app fills the screen: ' + JSON.stringify(m));
+    assert.ok(m.desk > m.vh * 0.6 && m.log > 250, 'chat area is expanded: ' + JSON.stringify(m));
+    assert.ok(m.tabsBottom >= m.vh - 4, 'tabs stay at the bottom: ' + JSON.stringify(m));
+    assert.ok(m.over <= 0, 'no sideways scroll: ' + JSON.stringify(m));
+    await ctx.close();
+  });
+
   for (const height of [480, 568, 640]) {
     it(`login and register remain reachable at ${height}px viewport height`, async () => {
       const ctx = await browser.newContext({ viewport: { width: 360, height }, isMobile: true, hasTouch: true, locale: 'fa-IR' });

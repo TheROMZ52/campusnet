@@ -1,5 +1,10 @@
 # Release notes
 
+## v0.15.5 - mobile layout fix (server side, no new APK needed)
+- **Fixed: on some phones (WebViews without `dvh` support) the chat area collapsed to a thin strip with the tabs jammed under the top bar and empty space below.** `#app` now has a `height:100%` fallback before `100dvh`, an explicit single grid column (`minmax(0,1fr)`, which also removes a 34px sideways overflow at 320px that the previous grid change introduced) and fixed grid rows for header, desk, status bar and tabs. Redeploy the server zip; the app picks it up on the next load.
+- Tests: new `chat still fills the screen on a WebView without dvh support` in `tests/e2e/layout.test.js` (strips every `dvh` declaration from the stylesheet, measures the app, chat area and tabs); it fails on the previous CSS. The 320px sideways-scroll test is green again.
+- `public/sw.js` `VERSION` and `package.json` are 0.15.5 so installed copies drop the old stylesheet.
+
 ## v0.15.0 - Android app
 - **Native Android app** in `android/` (Kotlin, Jetpack Compose, minSdk 26): animated intro (the hexagon draws itself over a drifting network), address field that accepts `ip:port`, domain or full URL (LAN addresses default to `http`, domains try `https` then `http`), connect button that morphs into a spinner and a check mark, shake on errors, expanding ring into the site. After the first connection the app opens straight into the site; recent servers are chips; back from the first page offers Change server / Exit. Persian and English.
 - WebView host: microphone permission for calls, file chooser for uploads, downloads through the system download manager with the session cookie, links to other sites open in the browser, offline/error screen with Retry.
