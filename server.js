@@ -53,7 +53,7 @@ function tlsOptions() {
     cert = path.join(DATA, 'cert.pem'); key = path.join(DATA, 'key.pem');
     if (!fs.existsSync(cert) || !fs.existsSync(key)) {
       const ips = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4').map(i => 'IP:' + i.address);
-      try { execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '825', '-subj', '/CN=campusnet', '-addext', 'subjectAltName=DNS:localhost,' + ips.join(',')], { stdio: 'ignore' }); log('INFO', 'created a self-signed certificate in ' + DATA); }
+      try { execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '825', '-subj', '/CN=campusnet', '-addext', 'subjectAltName=DNS:localhost,DNS:campusnet.home,' + ips.join(',')], { stdio: 'ignore' }); log('INFO', 'created a self-signed certificate in ' + DATA); }
       catch { bail('HTTPS=1 needs openssl to create a certificate (or set TLS_CERT and TLS_KEY).'); }
     }
   }
@@ -61,7 +61,8 @@ function tlsOptions() {
   try { return { cert: fs.readFileSync(cert), key: fs.readFileSync(key) }; } catch (e) { bail('cannot read TLS_CERT/TLS_KEY: ' + e.message); }
 }
 const TLS = tlsOptions();
-const HTTPS_PORT = TLS ? num('HTTPS_PORT', process.env.PORT !== undefined ? 0 : (PORT === 0 ? 0 : 3443), 0) : null;
+const PANEL_ASSIGNED_PORT = process.env.CAMPUSNET_HOSTED === '1' || (process.env.CAMPUSNET_HOSTED !== '0' && process.env.PORT !== undefined);
+const HTTPS_PORT = TLS ? num('HTTPS_PORT', PANEL_ASSIGNED_PORT ? 0 : (PORT === 0 ? 0 : 3443), 0) : null;
 if (TLS && PORT !== 0 && HTTPS_PORT !== 0 && PORT === HTTPS_PORT) bail('PORT and HTTPS_PORT must be different when both protocols are enabled.');
 
 /* ---------- persistence: atomic writes, .bak fallback, corrupt files are preserved ---------- */
@@ -653,6 +654,7 @@ setInterval(() => {   // housekeeping: expired sessions and stale throttle entri
 
 /* ---------- lifecycle ---------- */
 let closing = false;
+servers.forEach((srv, i) => srv.on('error', e => { if (!closing) bail(`${i === 0 ? 'HTTP' : 'HTTPS'} server error: ${e.message}`); }));
 function shutdown(sig) {
   if (closing) return; closing = true; log('INFO', `${sig} received, flushing data and shutting down`);
   flushAll(); wss.clients.forEach(ws => { try { ws.close(1001, 'server restarting'); } catch { /* ignore */ } });
