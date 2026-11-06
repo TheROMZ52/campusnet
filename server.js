@@ -61,6 +61,8 @@ function tlsOptions() {
   try { return { cert: fs.readFileSync(cert), key: fs.readFileSync(key) }; } catch (e) { bail('cannot read TLS_CERT/TLS_KEY: ' + e.message); }
 }
 const TLS = tlsOptions();
+const HTTPS_PORT = TLS ? num('HTTPS_PORT', process.env.PORT !== undefined ? 0 : (PORT === 0 ? 0 : 3443), 0) : null;
+if (TLS && PORT !== 0 && HTTPS_PORT !== 0 && PORT === HTTPS_PORT) bail('PORT and HTTPS_PORT must be different when both protocols are enabled.');
 
 /* ---------- persistence: atomic writes, .bak fallback, corrupt files are preserved ---------- */
 function rd(f, d) {
@@ -209,11 +211,11 @@ const SEC = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin',
   'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()',
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-  ...(TLS ? { 'Strict-Transport-Security': 'max-age=15552000' } : {})
 };
-const json = (res, code, o, extra) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...SEC, ...extra }); res.end(JSON.stringify(o)); };
 const cookie = (req, n) => { const c = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(n + '=')); return c ? c.slice(n.length + 1) : ''; };
-const isSecure = req => !!TLS || (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https');
+const isSecure = req => !!req.socket.encrypted || (TRUST_PROXY && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https');
+const responseSEC = req => ({ ...SEC, ...(isSecure(req) ? { 'Strict-Transport-Security': 'max-age=15552000' } : {}) });
+const json = (res, code, o, extra) => { const req = res.req; res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...responseSEC(req), ...extra }); res.end(JSON.stringify(o)); };
 const usedTotal = () => files.reduce((a, f) => a + f.size, 0);
 const usedBy = name => files.reduce((a, f) => a + (f.owner === name ? f.size : 0), 0);
 let inflightTotal = 0; const inflightUser = new Map(), activeUploads = new Map();
@@ -266,7 +268,7 @@ function handleDownload(req, res, url, id) {
     const mm = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
     if (mm && (mm[1] || mm[2])) {
       if (mm[1]) { start = +mm[1]; if (mm[2]) end = Math.min(end, +mm[2]); } else start = Math.max(0, f.size - +mm[2]);
-      if (start > end || start >= f.size) { res.writeHead(416, { 'Content-Range': 'bytes */' + f.size, ...SEC }); return res.end(); }
+      if (start > end || start >= f.size) { res.writeHead(416, { 'Content-Range': 'bytes */' + f.size, ...responseSEC(req) }); return res.end(); }
       code = 206;
     }
   }
@@ -274,7 +276,7 @@ function handleDownload(req, res, url, id) {
   st.on('error', e => { log('ERROR', 'download failed: ' + e.message); if (!res.headersSent) json(res, 410, { error: 'file is no longer available' }); else res.destroy(); });
   st.on('open', () => {
     const disp = `${inline || audio ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name)}`;
-    res.writeHead(code, { 'Content-Type': audio ? AUDIOT[ext] : inline ? IMGT[ext] : 'application/octet-stream', 'Content-Length': audio ? end - start + 1 : f.size, ...(audio ? { 'Accept-Ranges': 'bytes' } : {}), ...(code === 206 ? { 'Content-Range': `bytes ${start}-${end}/${f.size}` } : {}), 'Cache-Control': 'private, no-store', 'Content-Disposition': disp, ...SEC, ...(inline || audio ? { 'Content-Security-Policy': "default-src 'none'; sandbox" } : {}) });
+    res.writeHead(code, { 'Content-Type': audio ? AUDIOT[ext] : inline ? IMGT[ext] : 'application/octet-stream', 'Content-Length': audio ? end - start + 1 : f.size, ...(audio ? { 'Accept-Ranges': 'bytes' } : {}), ...(code === 206 ? { 'Content-Range': `bytes ${start}-${end}/${f.size}` } : {}), 'Cache-Control': 'private, no-store', 'Content-Disposition': disp, ...responseSEC(req), ...(inline || audio ? { 'Content-Security-Policy': "default-src 'none'; sandbox" } : {}) });
     st.pipe(res);
   });
   res.on('close', () => st.destroy());
@@ -316,12 +318,13 @@ const tempPassword = () => Array.from(crypto.randomBytes(12), b => TEMP_ALPHABET
 function dirSize(d) { let n = 0; try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); try { n += e.isDirectory() ? dirSize(f) : fs.statSync(f).size; } catch { /* ignore */ } } } catch { /* ignore */ } return n; }
 const validBlob = b => !!b && typeof b.s === 'string' && typeof b.iv === 'string' && typeof b.ct === 'string' && b.s.length <= 100 && b.iv.length <= 100 && b.ct.length <= 3000 && b.ct.length > 0;
 
-const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h))((req, res) => {
+const requestHandler = (req, res) => {
+  res.req = req;
   let url; try { url = new URL(req.url, 'http://x'); } catch { return json(res, 400, { error: 'bad url' }); }
   if (url.pathname === '/healthz') return json(res, 200, { ok: true, uptime: Math.round(process.uptime()), online: online().length });
   if (url.pathname === '/manifest.webmanifest' && (req.method === 'GET' || req.method === 'HEAD')) {   // name follows SITE_NAME
     const icon = (f, size, purpose) => ({ src: '/' + f, sizes: size + 'x' + size, type: 'image/png', purpose });
-    res.writeHead(200, { 'Content-Type': TYPES['.webmanifest'], 'Cache-Control': 'no-cache', ...SEC });
+    res.writeHead(200, { 'Content-Type': TYPES['.webmanifest'], 'Cache-Control': 'no-cache', ...responseSEC(req) });
     return res.end(req.method === 'HEAD' ? undefined : JSON.stringify({ id: '/', name: SITE, short_name: SITE.slice(0, 12), description: 'Private campus-style network: chat, groups, feed, music and voice calls.', start_url: '/', scope: '/', display: 'standalone', background_color: '#050706', theme_color: '#050706', icons: [icon('icon-192.png', 192, 'any'), icon('icon-512.png', 512, 'any'), icon('icon-maskable-512.png', 512, 'maskable')] }));
   }
   if (url.pathname === '/api/info') return json(res, 200, { name: SITE, needCode: !!CODE, maxMB: Math.round(MAX_FILE / 1048576) });
@@ -335,7 +338,7 @@ const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h
     const who = authToken(cookie(req, 'cn_s')); if (!who || !who.admin) return json(res, 403, { error: 'forbidden' });
     let name = bk[1]; if (name === 'now') { try { name = makeBackup('download').name; } catch (e) { log('ERROR', 'backup failed: ' + e.message); return json(res, 500, { error: 'backup failed' }); } }
     if (!BACKUP_RE.test(name)) return json(res, 404, { error: 'not found' });
-    return fs.readFile(path.join(BACKUP_DIR, name), (e, buf) => { if (e) return json(res, 404, { error: 'not found' }); res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': buf.length, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'private, no-store', ...SEC }); res.end(buf); });
+    return fs.readFile(path.join(BACKUP_DIR, name), (e, buf) => { if (e) return json(res, 404, { error: 'not found' }); res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': buf.length, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'private, no-store', ...responseSEC(req) }); res.end(buf); });
   }
   const dl = url.pathname.match(/^\/f\/([a-f0-9]{16})$/);
   if (req.method === 'GET' && dl) return handleDownload(req, res, url, dl[1]);
@@ -346,18 +349,22 @@ const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h
   if (!fp.startsWith(PUB + path.sep)) return json(res, 403, { error: 'forbidden' });
   fs.readFile(fp, (err, buf) => {
     if (err) return json(res, 404, { error: 'not found' });
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(fp)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SEC });
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(fp)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...responseSEC(req) });
     res.end(req.method === 'HEAD' ? undefined : buf);
   });
-});
-server.requestTimeout = 0;      // uploads may take long; stalled bodies are cut by the per-upload inactivity timeout
-server.headersTimeout = 30000; server.keepAliveTimeout = 5000;
+};
+const httpServer = http.createServer(requestHandler);
+const httpsServer = TLS ? https.createServer(TLS, requestHandler) : null;
+const servers = [httpServer, ...(httpsServer ? [httpsServer] : [])];
+for (const srv of servers) { srv.requestTimeout = 0; srv.headersTimeout = 30000; srv.keepAliveTimeout = 5000; }
 
 /* ---------- WebSocket ---------- */
 const wss = new WebSocketServer({
-  server, maxPayload: 16 * 1024,
+  noServer: true, maxPayload: 16 * 1024,
   verifyClient: ({ origin, req }) => { if (!origin) return true; try { return new URL(origin).host === req.headers.host; } catch { return false; } }
 });
+function handleUpgrade(req, socket, head) { wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req)); }
+servers.forEach(srv => srv.on('upgrade', handleUpgrade));
 const conns = new Map();
 
 function dmsFor(name) {
@@ -649,18 +656,29 @@ let closing = false;
 function shutdown(sig) {
   if (closing) return; closing = true; log('INFO', `${sig} received, flushing data and shutting down`);
   flushAll(); wss.clients.forEach(ws => { try { ws.close(1001, 'server restarting'); } catch { /* ignore */ } });
-  server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref();
+  let remaining = servers.length; const done = () => { if (--remaining <= 0) process.exit(0); };
+  servers.forEach(srv => { try { srv.close(done); } catch { done(); } });
+  setTimeout(() => process.exit(0), 4000).unref();
 }
 ['SIGINT', 'SIGTERM'].forEach(sig => process.on(sig, () => shutdown(sig)));
 process.on('exit', flushAll);
 process.on('uncaughtException', e => { console.error('FATAL uncaught exception:', e); try { flushAll(); } catch { /* ignore */ } process.exit(1); });
 process.on('unhandledRejection', e => log('ERROR', 'unhandled rejection: ' + (e && e.stack || e)));
 
-server.on('error', e => bail(e.code === 'EADDRINUSE' ? `port ${PORT} is already in use` : e.message));
-server.listen(PORT, '0.0.0.0', () => {
-  const port = server.address().port, proto = TLS ? 'https' : 'http';
-  console.log(`\n  ${SITE} is running\n  local:   ${proto}://localhost:${port}`);
-  for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) console.log(`  network: ${proto}://${i.address}:${port}   <- share this on your LAN`);
-  if (!TLS) console.log('  note: encrypted DMs need HTTPS or localhost. On a LAN start with HTTPS=1 (self-signed) or put it behind TLS.');
-  console.log(`  access code: ${CODE ? 'ON' : 'off'}   max file: ${fmt(MAX_FILE)}   data: ${DATA}\n  listening port=${port}\n`);
-});
+function listen(srv, port, label) { return new Promise((resolve, reject) => { const onError = e => { srv.removeListener('listening', onListening); reject(new Error(`${label}: ${e.code === 'EADDRINUSE' ? `port ${port} is already in use` : e.message}`)); }; const onListening = () => { srv.removeListener('error', onError); resolve(srv.address().port); }; srv.once('error', onError); srv.once('listening', onListening); srv.listen(port, '0.0.0.0'); }); }
+async function startServers() {
+  try {
+    const httpPort = await listen(httpServer, PORT, 'HTTP');
+    const httpsPort = httpsServer ? await listen(httpsServer, HTTPS_PORT, 'HTTPS') : null;
+    console.log(`\n  ${SITE} is running`);
+    console.log(`  local HTTP: http://localhost:${httpPort}`);
+    if (httpsPort !== null) console.log(`  local HTTPS: https://localhost:${httpsPort}`);
+    for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) { console.log(`  network HTTP: http://${i.address}:${httpPort}`); if (httpsPort !== null) console.log(`  network HTTPS: https://${i.address}:${httpsPort}`); }
+    if (httpsPort === null) console.log('  note: encrypted DMs need HTTPS or localhost. Set HTTPS=1 for a second local HTTPS listener, or use your hosting platform TLS proxy.');
+    if (httpsPort !== null && process.env.PORT !== undefined && process.env.HTTPS_PORT === undefined) console.log('  note: hosting panels usually expose only PORT; use their TLS proxy or set and expose HTTPS_PORT.');
+    console.log(`  access code: ${CODE ? 'ON' : 'off'}   max file: ${fmt(MAX_FILE)}   data: ${DATA}\n  listening port=${httpPort}`);
+    if (httpsPort !== null) console.log(`  https listening port=${httpsPort}`);
+    console.log('  startup complete\n');
+  } catch (e) { bail(e.message); }
+}
+startServers();
