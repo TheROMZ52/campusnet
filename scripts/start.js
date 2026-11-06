@@ -7,6 +7,7 @@
 const fs = require('node:fs'), path = require('node:path');
 const root = path.join(__dirname, '..'), envFile = path.join(root, '.env'), example = path.join(root, '.env.example');
 const hosted = process.env.PORT !== undefined || process.env.TRUST_PROXY !== undefined || process.env.NODE_ENV === 'production';   // decided before .env is read
+process.env.CAMPUSNET_HOSTED = hosted ? '1' : '0';
 if (!hosted && !fs.existsSync(envFile) && fs.existsSync(example)) { try { fs.copyFileSync(example, envFile); } catch { /* read-only folder: run without it */ } }
 function loadEnv(file) {
   let text; try { text = fs.readFileSync(file, 'utf8'); } catch { return; }

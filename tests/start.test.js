@@ -11,9 +11,9 @@ function project(files = {}) {   // a minimal copy of the project: what the depl
   fs.mkdirSync(path.join(dir, 'scripts')); fs.copyFileSync(path.join(ROOT, 'server.js'), path.join(dir, 'server.js')); fs.copyFileSync(path.join(ROOT, 'scripts', 'start.js'), path.join(dir, 'scripts', 'start.js'));
   for (const [n, c] of Object.entries(files)) fs.writeFileSync(path.join(dir, n), c); return dir;
 }
-function start(dir, env = {}) {
+function start(dir, env = {}, expectHttps = false) {
   const child = spawn(process.execPath, ['scripts/start.js'], { cwd: dir, env: { PATH: process.env.PATH, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); kids.push(child); let out = '';
-  return new Promise((res, rej) => { child.stdout.on('data', d => { out += d; const m = out.match(/listening port=(\d+)/); if (m) res({ port: +m[1], out: () => out }); }); child.stderr.on('data', d => { out += d; }); child.once('exit', c => rej(new Error('exited ' + c + ': ' + out.slice(0, 300)))); setTimeout(() => rej(new Error('timeout: ' + out.slice(0, 300))), 10000); });
+  return new Promise((res, rej) => { let done = false; const check = () => { const m = out.match(/listening port=(\d+)/), h = out.match(/https listening port=(\d+)/); if (m && (!expectHttps || h) && !done) { done = true; res({ port: +m[1], httpsPort: h ? +h[1] : null, out: () => out }); } }; child.stdout.on('data', d => { out += d; check(); }); child.stderr.on('data', d => { out += d; check(); }); child.once('exit', c => rej(new Error('exited ' + c + ': ' + out.slice(0, 300)))); setTimeout(() => { if (!done) rej(new Error('timeout: ' + out.slice(0, 500))); }, 10000); });
 }
 const getHttps = port => new Promise((res, rej) => https.get({ host: '127.0.0.1', port, path: '/healthz', rejectUnauthorized: false }, r => { let b = ''; r.on('data', d => { b += d; }); r.on('end', () => res(JSON.parse(b))); }).on('error', rej));
 
@@ -27,8 +27,8 @@ describe('npm start script', () => {
     assert.equal((await (await fetch(`http://127.0.0.1:${s.port}/healthz`)).json()).ok, true);
   });
   it('personal machine: creates .env from .env.example, loads it and serves HTTPS', { skip: !HAS_OPENSSL && 'openssl is not installed' }, async () => {
-    const dir = project({ '.env.example': `# comment\nPORT=0\nDATA_DIR=${path.join('.', 'mydata')}\nSITE_NAME="My Net"   # inline comment\n` }), s = await start(dir);
-    assert.ok(fs.existsSync(path.join(dir, '.env')), '.env was created'); assert.ok(/https:\/\/localhost/.test(s.out()), 'HTTPS banner'); assert.equal((await getHttps(s.port)).ok, true);
+    const dir = project({ '.env.example': `# comment\nPORT=0\nDATA_DIR=${path.join('.', 'mydata')}\nSITE_NAME="My Net"   # inline comment\n` }), s = await start(dir, {}, true);
+    assert.ok(fs.existsSync(path.join(dir, '.env')), '.env was created'); assert.ok(/local HTTPS: https:\/\/localhost/.test(s.out()), 'HTTPS banner'); assert.equal((await getHttps(s.httpsPort)).ok, true);
     assert.ok(fs.existsSync(path.join(dir, 'mydata')), 'DATA_DIR from the file is used');
   });
   it('HTTPS=0 in .env keeps plain HTTP on a personal machine', async () => {

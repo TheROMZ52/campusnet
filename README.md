@@ -191,8 +191,7 @@ npm install
 npm start
 ```
 
-`npm start` runs `scripts/start.js`: it loads `.env` (on a personal machine it creates it from `.env.example` the first time) and turns on HTTPS with a self-signed certificate so encrypted messages and calls work on a LAN. On a hosting platform (`PORT` or `TRUST_PROXY` already set, or `NODE_ENV=production`) it stays on plain HTTP behind the platform's proxy and works without any `.env`; real environment variables always win over the file. `node server.js` reads no `.env` and never forces HTTPS.
-The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone on the same network opens it. If they cannot connect, allow Node.js through your firewall (port 3000).
+`npm start` runs `scripts/start.js`: it loads `.env` (on a personal machine it creates it from `.env.example` the first time) and starts HTTP and HTTPS side by side with a self-signed certificate. By default the local ports are `3000` (HTTP) and `3443` (HTTPS); the console prints both LAN addresses. Both listeners use the same app and data, and HTTP is not redirected to HTTPS. On a hosting platform (`PORT` or `TRUST_PROXY` already set, or `NODE_ENV=production`) the panel-provided `PORT` is preserved and the app stays behind the platform proxy. Most panels expose only that one random port and terminate public HTTPS at their proxy, so use the platform TLS and `TRUST_PROXY=1`; set `HTTPS_PORT` only when the panel exposes a second port. Real environment variables always win over `.env`. `node server.js` reads no `.env` and never forces HTTPS.
 
 ---
 
@@ -205,7 +204,8 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 | `ACCESS_CODE` | none | Shared code required to join (recommended when online) |
 | `ADMIN_USERS` | none | Comma-separated usernames that are admins (post notices, delete anything) |
 | `ADMIN_CODE` | none | `/admin <code>` makes a signed-in user admin for the session |
-| `HTTPS` | off | Set to `1` to serve HTTPS with an auto-created self-signed certificate (needs openssl) |
+| `HTTPS` | off | Set to `1` to enable a second HTTPS listener beside HTTP (self-signed certificate; needs openssl) |
+| `HTTPS_PORT` | `3443` | HTTPS listener port; `0` asks the OS for a free port |
 | `TLS_CERT`, `TLS_KEY` | none | Paths to your own certificate and key |
 | `TRUST_PROXY` | off | Number of reverse proxies in front of the server (`1` = one). The client address is the entry that many places from the end of `X-Forwarded-For`, so entries a client forged on the left are ignored; set `2` behind two proxies (for example a CDN plus the platform) |
 | `BACKUP_EVERY_HOURS` | `24` | Hours between automatic backups (`0` = off) |
