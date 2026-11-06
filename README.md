@@ -1,10 +1,29 @@
-# CampusNet
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:050505,35:171717,70:303030,100:050505&height=190&section=header&text=CampusNet&fontSize=54&fontColor=ffffff&fontAlignY=38&desc=CHAT%2C%20FILES%20AND%20A%20LIVE%20MAP%20FOR%20YOUR%20NETWORK&descAlignY=62&descSize=13" width="100%" />
+
+<br/>
+
+<img src="https://img.shields.io/badge/NODE.JS-111111?style=for-the-badge&logo=nodedotjs&logoColor=white" /> <img src="https://img.shields.io/badge/WEBSOCKET-111111?style=for-the-badge&logo=socketdotio&logoColor=white" /> <img src="https://img.shields.io/badge/PWA-111111?style=for-the-badge&logo=pwa&logoColor=white" /> <img src="https://img.shields.io/github/stars/TheROMZ52/campusnet?style=for-the-badge&color=111111&labelColor=050505&logo=github" /> <img src="https://img.shields.io/github/last-commit/TheROMZ52/campusnet?style=for-the-badge&color=111111&labelColor=050505" />
+
+<br/>
 
 [فارسی](README.fa.md) · [English](README.md)
 
+### Your own little corner of the network: chat, files, and a live map — no corporate spaceship required.
+
+<img src="https://skillicons.dev/icons?i=nodejs,js,html,css,docker,githubactions&theme=dark" />
+
+</div>
+
+---
+
 A private, futuristic file-and-chat network for a LAN or the internet. Netrunner-style interface (black glass panels, neon green, live node map), accounts, channels, private chat, a broadcast board and fast file sharing. Node.js + WebSocket, one dependency.
 
-## Features
+---
+
+## 01 / FEATURES
+
 - Accounts: pick a username and password the first time; that name is yours (passwords are hashed with scrypt)
 - Channels (`#general`, `#random`, `#help`) with history, plus a notice board that only admins can post to
 - Private 1:1 chat, end-to-end encrypted in the browser (see below), also to people who are offline (kept in server memory only, never on disk)
@@ -21,7 +40,12 @@ A private, futuristic file-and-chat network for a LAN or the internet. Netrunner
 - Respects `prefers-reduced-motion`; keyboard friendly (`/` focuses the message box, `Esc` closes dialogs)
 - One dependency (`ws`)
 
-## Desktop (screens 1180px and wider)
+---
+
+<details>
+<summary><b>02 / DESKTOP (SCREENS 1180PX AND WIDER)</b></summary>
+<br/>
+
 After sign-in you land on an empty desktop whose wallpaper is the live map of online nodes. Apps open as windows from the icons on the left or the Start menu: Messages (channels and people inside), Network, Files, Board. Windows can be dragged, resize, minimize, maximize (double-click the title) and close; reopen them from the launcher on the left or the dock at the bottom. The layout is remembered in your browser (View > Tile windows resets it). Extra apps:
 - **Terminal**: `help`, `whoami`, `scan`, `files`, `ping`, `uptime`, `status`, `w <user> <msg>`, `open <#room|user|board>`
 - **Monitor**: live link state, measured latency graph, nodes, library size, unread, session time
@@ -29,7 +53,14 @@ After sign-in you land on an empty desktop whose wallpaper is the live map of on
 - **Settings**: CRT effect, animated background, sounds, forget trusted keys
 On phones and tablets the tabbed layout is used and the apps open full screen from the grid button in the top bar.
 
-## Android app (v0.15)
+</details>
+
+---
+
+<details>
+<summary><b>03B / ANDROID APP (V0.15)</b></summary>
+<br/>
+
 `android/` holds a native Kotlin / Jetpack Compose app that opens any CampusNet server: type the address once (`192.168.1.5:3000`, a domain, with or without `http://`), tap Connect, and from then on the app opens straight into the site.
 - Recent servers appear as chips; back from the first page offers **Change server** or **Exit**.
 - A foreground service (with a quiet "Connected" notification) keeps the connection alive in the background, and messages that arrive while the app is not on screen become real Android notifications (the text is decrypted by the page, the server never sees it). The first launch asks for notification permission and for exemption from battery optimisation.
@@ -37,7 +68,12 @@ On phones and tablets the tabbed layout is used and the apps open full screen fr
 - The APK is built by GitHub Actions (`.github/workflows/android.yml`): download `CampusNet.apk` from the **android-latest** release (main) or **android-dev** (other branches). It is signed with the key in `android/app/campusnet.jks` (password in `app/build.gradle.kts`): fine for sideloading to your own phones, not for a public store release. Build locally with Gradle 8.10 and JDK 17: `cd android && gradle assembleRelease`.
 - Not done: self-signed HTTPS certificates are rejected (use plain HTTP on the LAN or a real certificate), and the app has not been tested on a range of phones yet.
 
-## Installable app and offline start (v0.14)
+</details>
+
+---
+
+## 03 / INSTALLABLE APP AND OFFLINE START (V0.14)
+
 CampusNet is a PWA: on a phone or desktop browser you can install it (Settings > **Install app**, or the browser's own "Install" / "Add to Home Screen") and it opens in its own window with its own icon.
 - **Offline start:** a service worker (`public/sw.js`) keeps the page, scripts, styles, fonts and icons on the device, so the app opens even with **no connection at all**. Chat itself still needs the server: offline you see the sign-in screen and the app reconnects when the network is back. Messages, files and calls are never cached by the worker.
 - **Needs HTTPS** (or `localhost`): browsers only allow service workers and installation in a secure context. On plain `http://` over a LAN the site works as before but cannot be installed.
@@ -45,7 +81,12 @@ CampusNet is a PWA: on a phone or desktop browser you can install it (Settings >
 - The app name in the manifest follows `SITE_NAME`. On iPhone use Share > Add to Home Screen (Settings shows the steps).
 - Not done: push notifications and background sync (a browser tab cannot keep a connection in the background; the planned Android app will).
 
-## Admin tools, accounts and backups (v0.13)
+---
+
+<details>
+<summary><b>04 / ADMIN TOOLS, ACCOUNTS AND BACKUPS (V0.13)</b></summary>
+<br/>
+
 Administrators (`ADMIN_USERS`) get an **Admin** app in the launcher (hidden for everyone else, and every action is checked again on the server) with three tabs:
 - **Users:** search, suspend / restore (the user is signed out and cannot sign in until restored), reset password, delete. A reset gives a one-time **temporary password** (shown once, hand it over in person) and a new encryption identity, so that user cannot read their old private messages; they are asked to choose a new password after signing in. Deleting removes the account, its files, posts, groups it owns and its private messages. Administrators cannot be suspended, reset or deleted from this window.
 - **Server:** users, online now, files, storage, data folder size, uptime, version, and **Close registration / Open registration** (existing accounts are not affected).
@@ -54,26 +95,54 @@ Administrators (`ADMIN_USERS`) get an **Admin** app in the launcher (hidden for 
 - **Automatic backups:** a zip of accounts, messages, direct messages (ciphertext), notices, posts, groups, file list and settings is written to `DATA_DIR/backups` every `BACKUP_EVERY_HOURS` (default 24, `0` turns it off); the newest `BACKUP_KEEP` (default 7) are kept. Backups do **not** contain the uploaded files themselves: copy `DATA_DIR/uploads` separately. Only administrators can download backups (`/f/backup/<name>`).
 - **Restore:** stop the server, then `node scripts/restore.js <backup.zip> --yes` (add `--data DIR` if needed). The current data files are moved to `before-restore-<time>/` first, nothing is deleted.
 
-## Voice calls (v0.12)
+</details>
+
+---
+
+<details>
+<summary><b>05 / VOICE CALLS (V0.12)</b></summary>
+<br/>
+
 Open a direct message with someone who is online and press **[Call]** in the conversation header. They get an incoming-call box (ring, Accept / Decline); during the call you can mute and end it. One call at a time per person; a missed call leaves an alert.
 - **How it works:** signaling and audio both travel over the existing WebSocket and the server only relays. It needs no UDP ports, STUN or TURN, so it works on any host that supports WebSocket, including a domestic-only network. The trade-off is quality and delay: voice is **8 kHz telephone quality** (about 8 KB/s each way), and delay is typically a few hundred milliseconds because audio goes through the server over TCP.
 - **Privacy:** every audio frame is encrypted in the browser with AES-256-GCM using the same pairwise key as direct messages (a fresh nonce per call and direction), so the server relays ciphertext only. The server does see who calls whom, when and for how long (it keeps no call history except the missed-call alert). A call cannot start while your encryption key is locked (after a reload, enter your password first) or if the contact's safety number changed.
 - **Limits:** one-to-one only (no group calls), needs HTTPS or localhost and a microphone permission, headphones recommended (echo cancellation depends on the device), and audio may stop when the browser suspends a background tab or the phone screen is off. Not available in `?demo` mode.
 - **Capacity:** a call costs the server about 16 KB/s while active (both directions). Settings: `CALL_RING_MS` (ring time, default 45000).
 
-## Persian (v0.10)
+</details>
+
+---
+
+<details>
+<summary><b>06 / PERSIAN (V0.10)</b></summary>
+<br/>
+
 The whole interface is available in Persian (فارسی) and English. The language follows your browser the first time; change it with the button on the sign-in screen or in Settings > Language (the page reloads and your session continues). In Persian the content of windows and chat is right-to-left with the Vazirmatn font (served from `public/fonts/`, SIL Open Font License, see `Vazirmatn-OFL.txt`), messages use automatic text direction so mixed Persian/English lines read correctly, and dates use the Persian calendar. The window frame (title bars, launcher, taskbar) keeps its left-to-right layout. The terminal intentionally keeps English commands and output.
 
 Adding or changing text: wrap UI text in `tr('English text {name}', { name })` (or `trn(n, 'one', 'many')`) and add the Persian version to `FA` in `public/i18n.js`. English is the key and the fallback. `npm test` fails if a `tr()` text, a page text in `index.html` or a server message has no Persian entry, or if a translation loses a `{placeholder}`.
 
-## Home, Music, reload and Back (v0.9)
+</details>
+
+---
+
+<details>
+<summary><b>07 / HOME, MUSIC, RELOAD AND BACK (V0.9)</b></summary>
+<br/>
+
 - **Home** is the first window on a fresh desktop: greeting, live counters, shortcuts to every app, the player, unread conversations, alerts, latest posts and the newest announcement. It is also what Back lands on.
 - **Music** is a separate app. Every audio file shared on the network (mp3, ogg, opus, wav, m4a, aac, flac) is in the library; upload from the Music window, play, seek, shuffle, repeat, volume. The player keeps playing when the window is closed and the track shows in the system media controls. Playback streams from the server with HTTP byte ranges. Pick a **profile song** (Music or People > Your profile): others see it on your profile in People search and can play it. A deleted file disappears from profiles.
 - **Reload:** the session survives a page reload (the token lives in the tab's sessionStorage). Your encryption key does not: after a reload a bar asks for your password to unlock encrypted messages, until then DMs show as locked and are still counted as unread. The open conversation is restored. If the server restarted, you are asked to sign in again.
 - **Back/Forward** move between conversations and Home and never leave the app; links like `#/c/d/alice` or `#/c/r/general` open that conversation.
 - Blocked people never reach you in channels: the server filters live messages and history for you.
 
-## Messaging and social (v0.7)
+</details>
+
+---
+
+<details>
+<summary><b>08 / MESSAGING AND SOCIAL (V0.7)</b></summary>
+<br/>
+
 - **Messages:** reply, edit (own), delete (own; admins can delete channel messages), emoji reactions, pinned channel messages (admins, max 5 per channel), per-conversation mute. Hover a message (always visible on touch screens) for its actions. `Esc` cancels reply/edit. Replies and edits in direct messages are encrypted like the message itself.
 - **Read receipts and unread:** each conversation stores a "read up to" time on the server, so unread badges survive reloads and other devices. Direct messages show a check mark when sent and two when the other person has read them. You can turn receipts off in People > Your profile (then you neither send nor see them).
 - **People:** display name, bio and a small avatar (resized in the browser to 64x64), search by name, follow/unfollow and block. Blocking stops direct messages both ways, removes follows and hides the person from your lists, search and feed.
@@ -81,10 +150,22 @@ Adding or changing text: wrap UI text in `tr('English text {name}', { name })` (
 - **Alerts:** follows, likes, reactions, replies and @mentions, stored on the server until you read them.
 - Channels, the feed, profiles and reactions are **not** end-to-end encrypted. Reactions on direct messages are visible to the server (which emoji, by whom), the message text is not.
 
-## Groups and communities (v0.8)
+</details>
+
+---
+
+<details>
+<summary><b>09 / GROUPS AND COMMUNITIES (V0.8)</b></summary>
+<br/>
+
 Open the Groups window to create a group (public: anyone can find and join; or invite-only), discover public groups, and manage members. Roles are enforced by the server: **owner** (everything, including roles, rename, delete), **moderator** (invite, remove members, delete messages, pin) and **member** (post, react, reply, edit own). Group messages go only to members and have the same features as channels (reply, edit, reactions, pins, mute, unread). Groups are **not end-to-end encrypted**: the server stores their messages in `groups.json`. An owner cannot leave (delete the group instead), a group has at most 200 members and a user can own at most 10 groups.
 
-## Encrypted direct messages
+</details>
+
+---
+
+## 10 / ENCRYPTED DIRECT MESSAGES
+
 Direct messages are encrypted in your browser with ECDH (P-256) + AES-256-GCM (Web Crypto, no dependencies). Each account has a key pair created on first sign-in; the private key is wrapped with a key derived from your password (PBKDF2) and stored on the server only as an opaque blob, so you can sign in from any device. The server relays ciphertext and rejects plaintext DMs.
 
 Browsers only offer Web Crypto on **HTTPS or localhost**. On a LAN over plain `http://192.168...` encrypted DMs are disabled (the UI says so). Fix: start with `HTTPS=1 npm start` (creates a self-signed certificate with openssl, then open the `https://` address and accept the browser warning once), or set `TLS_CERT` and `TLS_KEY`, or put it behind a TLS proxy.
@@ -95,10 +176,16 @@ What it protects, and what it does not:
 - A malicious server operator could swap a public key or serve modified code. Compare **safety numbers** (Security app) with your contact over another channel; the app warns and blocks sending if a contact's key changes.
 - There is no password reset: the key is protected by your password. If the stored key cannot be unlocked a new one is created and your contacts see a key change.
 
-## Preview the look (no server needed)
+---
+
+## 11 / PREVIEW THE LOOK (NO SERVER NEEDED)
+
 Open `public/index.html?demo` in a browser (double-click works, or use the GitHub Pages link of the repo). The real interface runs against a simulated in-browser network: any username and password work, bots chat, uploads and notices are simulated, and a yellow DEMO badge is always shown. Nothing is stored and downloads are disabled. Without `?demo` the page talks to the real server.
 
-## Run on your LAN
+---
+
+## 12 / RUN ON YOUR LAN
+
 ```bash
 npm install
 npm start
@@ -107,7 +194,10 @@ npm start
 `npm start` runs `scripts/start.js`: it loads `.env` (on a personal machine it creates it from `.env.example` the first time) and turns on HTTPS with a self-signed certificate so encrypted messages and calls work on a LAN. On a hosting platform (`PORT` or `TRUST_PROXY` already set, or `NODE_ENV=production`) it stays on plain HTTP behind the platform's proxy and works without any `.env`; real environment variables always win over the file. `node server.js` reads no `.env` and never forces HTTPS.
 The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone on the same network opens it. If they cannot connect, allow Node.js through your firewall (port 3000).
 
-## Settings (environment variables)
+---
+
+## 13 / SETTINGS (ENVIRONMENT VARIABLES)
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PORT` | `3000` | Port |
@@ -127,7 +217,10 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 Example (Linux/macOS): `ACCESS_CODE=secret MAX_FILE_MB=200 npm start`
 Windows (PowerShell): `$env:ACCESS_CODE="secret"; npm start`
 
-## Run online
+---
+
+## 14 / RUN ONLINE
+
 You need a host that runs Node.js with a persistent disk: a VPS, Railway, Render, Fly.io, or any Docker host. Static-only hosts (GitHub Pages, InfinityFree) cannot run it.
 
 ```bash
@@ -136,10 +229,20 @@ docker run -d -p 3000:3000 -e ACCESS_CODE=secret -v campusnet-data:/data campusn
 ```
 Put it behind HTTPS (Caddy, nginx, or your host's built-in TLS). The client automatically uses `wss://` on HTTPS pages.
 
-## Deploying
+---
+
+<details>
+<summary><b>15 / DEPLOYING</b></summary>
+<br/>
+
 See `DEPLOY.md` (English) and `DEPLOY.fa.md` (فارسی). `npm run pack` builds `dist/campusnet-<version>.zip` with files at the root and `server.js` as the start file. There is nothing to install: the only library (`ws`) is vendored in `vendor/ws`, so a start never needs npm, git or any international site. The docs cover the host requirements (WebSocket, persistent `DATA_DIR`, HTTPS), the environment variables, a first-run checklist and what to do if the international internet is cut.
 
-## Security
+</details>
+
+---
+
+## 16 / SECURITY
+
 **Threat model.** CampusNet is built for a trusted-ish LAN or a small public server run by someone you know. It defends against: other users trying to crash the server, claim the admin name, read other people's files or DMs, exhaust disk space, or brute-force logins; and against passive network observers (when HTTPS is used). It does **not** defend against a malicious server operator (they serve the client code and receive your password at sign-in), a compromised browser or device, or traffic analysis (who talks to whom and when is visible to the server).
 
 What is in place:
@@ -155,20 +258,46 @@ What is in place:
 - Anyone signed in can download any shared file. Set `ACCESS_CODE` when the server is public and do not share secrets in files.
 - Use HTTPS when online, otherwise passwords travel unencrypted.
 
-## Backup and restore
+---
+
+<details>
+<summary><b>17 / BACKUP AND RESTORE</b></summary>
+<br/>
+
 All state is in `DATA_DIR` (default `./data`): `users.json` (accounts, profiles, follows, blocks, read positions, mutes), `messages.json`, `dms.json` (ciphertext), `notices.json`, `posts.json`, `notifs.json`, `groups.json`, `files.json`, `uploads/`, plus a `.bak` copy of each JSON file from the previous write.
 - **Backup:** the server makes zip backups by itself (see "Admin tools, accounts and backups"); they hold the data files but not `uploads/`. For a complete copy, stop the server (or use a filesystem snapshot), then copy the whole `DATA_DIR`. Copying while it runs can capture `files.json` and `uploads/` at slightly different moments.
 - **Restore:** stop the server, replace `DATA_DIR` with the backup, start it again. If a JSON file is corrupt the server falls back to its `.bak` and keeps the corrupt file for inspection.
 - Back up `users.json` together with `dms.json`: DMs can only be read with the users' passwords, which unlock their keys.
 
-## Terminal and monitor
+</details>
+
+---
+
+<details>
+<summary><b>18 / TERMINAL AND MONITOR</b></summary>
+<br/>
+
 Every terminal command is real: `ping` (HTTP and WebSocket round trip), `diag` (server uptime and connections from `/healthz`, HTTP and WebSocket latency, clock difference to the server, secure-context and encryption state), `scan`, `files`, `whoami`, `uptime`, `status`, `w`, `open`. The Monitor shows only live values from your session. In `?demo` mode nodes, replies and latency are simulated in the browser and both windows say so.
 
-## Tests
+</details>
+
+---
+
+<details>
+<summary><b>19 / TESTS</b></summary>
+<br/>
+
 GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
 `npm test` runs the server integration tests (97, no browser). `npm run test:e2e` (49 tests) drives the real UI in Chromium with Playwright (needs a Chromium: set `PW_CHROMIUM=/path/to/chrome` or run `npx playwright-core install chromium`). Both start their own server on a temp data dir.
 
-## Files
+</details>
+
+---
+
+<details>
+<summary><b>20 / FILES</b></summary>
+<br/>
+
 | File | Purpose |
 | --- | --- |
 | `server.js` | HTTP, WebSocket, uploads, persistence |
@@ -187,5 +316,28 @@ GitHub Actions (`.github/workflows/ci.yml`) runs both suites on every push.
 | `public/demo.js` | Preview mode with a simulated network |
 | `Dockerfile` | Container build |
 
-## License
+</details>
+
+---
+
+<details>
+<summary><b>21 / LICENSE</b></summary>
+<br/>
+
 MIT
+
+</details>
+
+---
+
+<div align="center">
+
+<a href="https://github.com/TheROMZ52?tab=repositories"><img src="https://img.shields.io/badge/MORE%20PROJECTS-111111?style=for-the-badge&logo=github&logoColor=white" /></a>
+
+<br/><br/>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:050505,50:202020,100:050505&height=110&section=footer" width="100%" />
+
+<sub>© TheROMZ52 • Built with code, curiosity, and a suspicious number of tabs.</sub>
+
+</div>

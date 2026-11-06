@@ -1,4 +1,20 @@
-# CampusNet
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:050505,35:171717,70:303030,100:050505&height=190&section=header&text=CampusNet&fontSize=54&fontColor=ffffff&fontAlignY=38&desc=CHAT%2C%20FILES%20AND%20A%20LIVE%20MAP%20FOR%20YOUR%20NETWORK&descAlignY=62&descSize=13" width="100%" />
+
+<br/>
+
+<img src="https://img.shields.io/badge/NODE.JS-111111?style=for-the-badge&logo=nodedotjs&logoColor=white" /> <img src="https://img.shields.io/badge/WEBSOCKET-111111?style=for-the-badge&logo=socketdotio&logoColor=white" /> <img src="https://img.shields.io/badge/PWA-111111?style=for-the-badge&logo=pwa&logoColor=white" /> <img src="https://img.shields.io/github/stars/TheROMZ52/campusnet?style=for-the-badge&color=111111&labelColor=050505&logo=github" /> <img src="https://img.shields.io/github/last-commit/TheROMZ52/campusnet?style=for-the-badge&color=111111&labelColor=050505" />
+
+<br/>
+
+### گوشه‌ی خصوصی خودت از شبکه: چت، فایل و نقشه‌ی زنده؛ بدون سفینه‌ی شرکتی و دردسر اضافه.
+
+<img src="https://skillicons.dev/icons?i=nodejs,js,html,css,docker,githubactions&theme=dark" />
+
+</div>
+
+---
 
 **کامپوس‌نت** یک شبکهٔ اجتماعی و اشتراک فایل با ظاهر سایبرپانکی است که روی شبکهٔ محلی (LAN) یا اینترنت اجرا می‌شود. این پروژه با Node.js و WebSocket ساخته شده و رابط فارسی و راست‌به‌چپ هم دارد.
 
@@ -6,7 +22,9 @@
 - راهنمای استقرار: [DEPLOY.fa.md](DEPLOY.fa.md)
 - مجوز: MIT
 
-## قابلیت‌ها
+---
+
+## 01 / قابلیت‌ها
 
 - ساخت حساب با نام کاربری و گذرواژه؛ گذرواژه‌ها با `scrypt` هش می‌شوند.
 - گفت‌وگوی عمومی در کانال‌ها و پیام خصوصی دونفره.
@@ -22,14 +40,18 @@
 - نقشهٔ زندهٔ کاربران متصل، ابزارهای Terminal و Monitor داخل برنامه.
 - پشتیبانی از HTTPS، محدودیت دسترسی با کد مشترک و تنظیم سقف فضای فایل‌ها.
 
-## پیش‌نیازها
+---
+
+## 02 / پیش‌نیازها
 
 - Node.js نسخهٔ ۱۸ یا جدیدتر
 - npm
 - برای HTTPS خودکار در اجرای محلی، OpenSSL
 - برای اجرای آزمون‌های رابط کاربری، Chromium
 
-## نصب و اجرا
+---
+
+## 03 / نصب و اجرا
 
 مخزن را دریافت و وابستگی‌ها را نصب کنید:
 
@@ -65,7 +87,9 @@ docker run -d -p 3000:3000 -e ACCESS_CODE=change-me -v campusnet-data:/data camp
 
 برای انتشار عمومی، HTTPS را از طریق پراکسی یا سرویس میزبانی فعال کنید و حتماً یک کد دسترسی تنظیم کنید.
 
-## تنظیمات محیطی
+---
+
+## 04 / تنظیمات محیطی
 
 تنظیمات را می‌توان از طریق متغیرهای محیطی یا فایل `.env` تعیین کرد. مقادیر متغیرهای محیطی سیستم بر مقادیر فایل اولویت دارند.
 
@@ -99,7 +123,11 @@ $env:ACCESS_CODE = "your-secret-code"
 npm start
 ```
 
-## اپ اندروید (نسخه‌ی ۰.۱۵)
+---
+
+<details>
+<summary><b>04B / اپ اندروید (نسخه‌ی ۰.۱۵)</b></summary>
+<br/>
 
 پوشه‌ی `android/` یک اپ نیتیو (Kotlin و Jetpack Compose) است که به هر سرور CampusNet وصل می‌شود: آدرس را یک بار بنویس (`192.168.1.5:3000` یا دامنه، با `http://` یا بدون آن)، اتصال را بزن و از آن به بعد اپ مستقیم داخل سایت باز می‌شود.
 
@@ -109,7 +137,13 @@ npm start
 - APK را GitHub Actions می‌سازد (`.github/workflows/android.yml`): فایل `CampusNet.apk` را از release با نام **android-latest** (برنچ main) یا **android-dev** (بقیه‌ی برنچ‌ها) دانلود کن. با کلید داخل `android/app/campusnet.jks` امضا می‌شود (رمزش در `app/build.gradle.kts`): برای نصب دستی روی گوشی‌های خودت خوب است، برای انتشار عمومی در فروشگاه نه. ساخت لوکال با Gradle 8.10 و JDK 17: `cd android && gradle assembleRelease`.
 - انجام نشده: گواهی HTTPS خودامضا رد می‌شود (در LAN از HTTP ساده یا گواهی واقعی استفاده کن) و اپ هنوز روی گوشی‌های مختلف تست نشده.
 
-## برنامه‌ی نصب‌پذیر و شروع بدون اینترنت (نسخه‌ی ۰.۱۴)
+</details>
+
+---
+
+<details>
+<summary><b>05 / برنامه‌ی نصب‌پذیر و شروع بدون اینترنت (نسخه‌ی ۰.۱۴)</b></summary>
+<br/>
 
 CampusNet یک PWA است: روی گوشی یا مرورگر دسکتاپ می‌توانید نصبش کنید (تنظیمات > **Install app** یا گزینه‌ی «Install» / «Add to Home Screen» خود مرورگر) و با آیکون و پنجره‌ی خودش باز می‌شود.
 
@@ -119,7 +153,13 @@ CampusNet یک PWA است: روی گوشی یا مرورگر دسکتاپ می�
 - نام برنامه در manifest از `SITE_NAME` می‌آید. در آیفون از Share > Add to Home Screen استفاده کنید (تنظیمات مراحلش را نشان می‌دهد).
 - انجام نشده: اعلان push و همگام‌سازی پس‌زمینه (تب مرورگر نمی‌تواند در پس‌زمینه اتصال نگه دارد؛ اپ اندروید برنامه‌ریزی‌شده این کار را می‌کند).
 
-## ابزار مدیر، حساب کاربری و بکاپ (نسخه‌ی ۰.۱۳)
+</details>
+
+---
+
+<details>
+<summary><b>06 / ابزار مدیر، حساب کاربری و بکاپ (نسخه‌ی ۰.۱۳)</b></summary>
+<br/>
 
 مدیرها (`ADMIN_USERS`) برنامه‌ی **Admin** را در لانچر می‌بینند (برای بقیه پنهان است و هر عمل در سرور دوباره بررسی می‌شود). سه تب دارد:
 
@@ -133,7 +173,11 @@ CampusNet یک PWA است: روی گوشی یا مرورگر دسکتاپ می�
 
 **بازگردانی:** سرور را متوقف کنید و `node scripts/restore.js <backup.zip> --yes` را اجرا کنید (در صورت نیاز `--data DIR`). فایل‌های فعلی اول در `before-restore-<time>/` کنار گذاشته می‌شوند و چیزی پاک نمی‌شود.
 
-## رمزگذاری و امنیت
+</details>
+
+---
+
+## 07 / رمزگذاری و امنیت
 
 - پیام‌های خصوصی در مرورگر فرستنده رمزگذاری می‌شوند و سرور متن آن‌ها را به‌صورت رمز‌شده نگه می‌دارد و منتقل می‌کند.
 - برای قابلیت‌های مبتنی بر Web Crypto، از جمله پیام خصوصی رمزگذاری‌شده و تماس صوتی، باید از HTTPS یا `localhost` استفاده شود. در HTTP معمولی روی IP شبکهٔ محلی، این قابلیت‌ها ممکن است غیرفعال باشند.
@@ -142,11 +186,17 @@ CampusNet یک PWA است: روی گوشی یا مرورگر دسکتاپ می�
 - برای استقرار عمومی، HTTPS و `ACCESS_CODE` را فعال کنید، دسترسی به سرور را محدود نگه دارید و از پوشهٔ داده‌ها نسخهٔ پشتیبان تهیه کنید.
 - اگر کلید خصوصی پیام‌ها با گذرواژهٔ کاربر باز نشود، بازیابی عادی گذرواژه وجود ندارد؛ گذرواژه را با دقت نگهداری کنید.
 
-## پیش‌نمایش بدون سرور
+---
+
+## 08 / پیش‌نمایش بدون سرور
 
 برای دیدن رابط کاربری در حالت نمایشی، فایل `public/index.html?demo` را در مرورگر باز کنید. در این حالت شبکه و فعالیت کاربران شبیه‌سازی می‌شود؛ ورود و پیام‌ها واقعی نیستند و فایل‌ها واقعاً بارگذاری نمی‌شوند.
 
-## آزمون‌ها
+---
+
+<details>
+<summary><b>09 / آزمون‌ها</b></summary>
+<br/>
 
 اجرای آزمون‌های سرور:
 
@@ -162,7 +212,13 @@ npm run test:e2e
 
 آزمون‌های انتهابه‌انتها به Chromium نیاز دارند. در صورت نیاز مسیر مرورگر را با متغیر `PW_CHROMIUM` مشخص کنید یا Chromium سازگار را برای `playwright-core` نصب کنید.
 
-## ساختار کلی پروژه
+</details>
+
+---
+
+<details>
+<summary><b>10 / ساختار کلی پروژه</b></summary>
+<br/>
 
 | مسیر | توضیح |
 | --- | --- |
@@ -178,10 +234,38 @@ npm run test:e2e
 
 برای اطلاعات کامل‌تر دربارهٔ راه‌اندازی و انتشار، [راهنمای استقرار فارسی](DEPLOY.fa.md) را ببینید.
 
-## مشارکت
+</details>
+
+---
+
+<details>
+<summary><b>11 / مشارکت</b></summary>
+<br/>
 
 برای گزارش اشکال، پیشنهاد قابلیت یا ارسال تغییرات، از بخش Issues و Pull requests مخزن GitHub استفاده کنید.
 
-## مجوز
+</details>
+
+---
+
+<details>
+<summary><b>12 / مجوز</b></summary>
+<br/>
 
 این پروژه تحت مجوز [MIT](LICENSE) منتشر شده است.
+
+</details>
+
+---
+
+<div align="center">
+
+<a href="https://github.com/TheROMZ52?tab=repositories"><img src="https://img.shields.io/badge/MORE%20PROJECTS-111111?style=for-the-badge&logo=github&logoColor=white" /></a>
+
+<br/><br/>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:050505,50:202020,100:050505&height=110&section=footer" width="100%" />
+
+<sub>© TheROMZ52 • ساخته‌شده با کد، کنجکاوی و تعداد مشکوکی تب باز.</sub>
+
+</div>
