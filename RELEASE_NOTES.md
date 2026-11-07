@@ -1,5 +1,13 @@
 # Release notes
 
+## v0.16.0 - plain HTTP and HTTPS at the same time
+- New `HTTPS_PORT`: when set, the server listens on `PORT` for plain **HTTP** and on `HTTPS_PORT` for **HTTPS**, one process, one data folder, one WebSocket hub (a user on `ws://` and a user on `wss://` see each other and chat). The certificate is the openssl self-signed one (`DATA_DIR/cert.pem`) or `TLS_CERT` / `TLS_KEY`. `PORT` and `HTTPS_PORT` must differ. The banner prints both addresses plus an extra `secure port=` line.
+- `npm start` on a personal machine now serves HTTP on `PORT` (3000) and HTTPS on `PORT+443` (3443) instead of HTTPS only on 3000, so existing `http://` bookmarks and the Android app keep working while calls, encrypted DMs and installing the app use the `https://` address. **Behaviour change:** an old `https://host:3000` bookmark now needs `:3443`. `HTTPS=0` still means plain HTTP only and `HTTPS=1` still means HTTPS only on `PORT`.
+- The download cookie's `Secure` flag is decided per connection (`socket.encrypted` or `X-Forwarded-Proto` behind a trusted proxy) instead of "TLS is configured", so the HTTP listener never sets a `Secure` cookie. The WebSocket origin check applies on both ports.
+- Hosting platforms (Pufferland) are unchanged: one platform-assigned `PORT`, TLS ends at the platform, leave `HTTPS_PORT` unset.
+- Tests: new `tests/dual.test.js` (8): both ports answer, no scheme mixing, cross-scheme chat, `Secure` cookie only over HTTPS (fails with the old per-process check), wrong Origin refused on HTTPS, `PORT` equals `HTTPS_PORT` rejected, old modes unchanged; `tests/start.test.js` updated for the new personal-machine default and the explicit `HTTPS=1` mode.
+- Not done: the Android app still rejects a self-signed LAN certificate (use `http://` there, or a real certificate); in a browser that has used both origins the download cookie is shared by host, so open the downloads from the origin you signed in on.
+
 ## v0.15.6 - ready-made Pufferland package
 - `npm run pack:pufferland` (options `--admin NAME --site NAME --access CODE`, output `dist/campusnet-pufferland-<version>.zip`) builds a zip made for Pufferland's "manual upload" form: files at the zip root, **`index.js` (the form's default start file)**, a generated private `.env` (`SITE_NAME`, `TRUST_PROXY=1`, `ADMIN_USERS`, a random 24-character `ADMIN_CODE`, backups on) and the Persian guide `PUFFERLAND.fa.md` with the value for every field of the form. The plain `npm run pack` zip is unchanged (no `.env`).
 - `scripts/start.js`: a `.env` that sets `TRUST_PROXY` (or `NODE_ENV=production`) now also counts as a hosted copy, so the self-signed HTTPS that is meant for a LAN is never switched on behind a platform proxy even if the platform gives only `PORT`.

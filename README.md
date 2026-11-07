@@ -168,7 +168,7 @@ Open the Groups window to create a group (public: anyone can find and join; or i
 
 Direct messages are encrypted in your browser with ECDH (P-256) + AES-256-GCM (Web Crypto, no dependencies). Each account has a key pair created on first sign-in; the private key is wrapped with a key derived from your password (PBKDF2) and stored on the server only as an opaque blob, so you can sign in from any device. The server relays ciphertext and rejects plaintext DMs.
 
-Browsers only offer Web Crypto on **HTTPS or localhost**. On a LAN over plain `http://192.168...` encrypted DMs are disabled (the UI says so). Fix: start with `HTTPS=1 npm start` (creates a self-signed certificate with openssl, then open the `https://` address and accept the browser warning once), or set `TLS_CERT` and `TLS_KEY`, or put it behind a TLS proxy.
+Browsers only offer Web Crypto on **HTTPS or localhost**. On a LAN over plain `http://192.168...` encrypted DMs are disabled (the UI says so). Fix: `npm start` now serves **plain HTTP and HTTPS together** (HTTP on `PORT`, HTTPS with a self-signed openssl certificate on `PORT+443`, e.g. `http://192.168.1.5:3000` and `https://192.168.1.5:3443`): open the `https://` address and accept the browser warning once (or start with `HTTPS_PORT=3443 node server.js`), or set `TLS_CERT` and `TLS_KEY`, or put it behind a TLS proxy.
 
 What it protects, and what it does not:
 - Protects DM content from other users, server logs, memory dumps and network sniffing.
@@ -191,7 +191,7 @@ npm install
 npm start
 ```
 
-`npm start` runs `scripts/start.js`: it loads `.env` (on a personal machine it creates it from `.env.example` the first time) and turns on HTTPS with a self-signed certificate so encrypted messages and calls work on a LAN. On a hosting platform (`PORT` or `TRUST_PROXY` already set, or `NODE_ENV=production`) it stays on plain HTTP behind the platform's proxy and works without any `.env`; real environment variables always win over the file. `node server.js` reads no `.env` and never forces HTTPS.
+`npm start` runs `scripts/start.js`: it loads `.env` (on a personal machine it creates it from `.env.example` the first time) and serves plain HTTP on `PORT` with HTTPS (self-signed certificate) next to it on `PORT+443`, so encrypted messages and calls work on a LAN over the `https://` address while the `http://` address keeps working for everything else. On a hosting platform (`PORT` or `TRUST_PROXY` already set, or `NODE_ENV=production`) it stays on plain HTTP behind the platform's proxy and works without any `.env`; real environment variables always win over the file. `node server.js` reads no `.env` and never forces HTTPS.
 The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone on the same network opens it. If they cannot connect, allow Node.js through your firewall (port 3000).
 
 ---
@@ -205,7 +205,8 @@ The console prints a `network:` address like `http://192.168.1.20:3000`. Anyone 
 | `ACCESS_CODE` | none | Shared code required to join (recommended when online) |
 | `ADMIN_USERS` | none | Comma-separated usernames that are admins (post notices, delete anything) |
 | `ADMIN_CODE` | none | `/admin <code>` makes a signed-in user admin for the session |
-| `HTTPS` | off | Set to `1` to serve HTTPS with an auto-created self-signed certificate (needs openssl) |
+| `HTTPS_PORT` | off | Serve HTTPS on this port **in addition to** plain HTTP on `PORT` (self-signed certificate created with openssl unless `TLS_CERT` and `TLS_KEY` are set). `npm start` sets it to `PORT+443` on a personal machine; behind a hosting platform leave it off |
+| `HTTPS` | off | Set to `1` for HTTPS **only**, on `PORT` (no plain HTTP) |
 | `TLS_CERT`, `TLS_KEY` | none | Paths to your own certificate and key |
 | `TRUST_PROXY` | off | Number of reverse proxies in front of the server (`1` = one). The client address is the entry that many places from the end of `X-Forwarded-For`, so entries a client forged on the left are ignored; set `2` behind two proxies (for example a CDN plus the platform) |
 | `BACKUP_EVERY_HOURS` | `24` | Hours between automatic backups (`0` = off) |

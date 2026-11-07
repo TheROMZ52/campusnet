@@ -13,7 +13,7 @@ function project(files = {}) {   // a minimal copy of the project: what the depl
 }
 function start(dir, env = {}) {
   const child = spawn(process.execPath, ['scripts/start.js'], { cwd: dir, env: { PATH: process.env.PATH, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); kids.push(child); let out = '';
-  return new Promise((res, rej) => { child.stdout.on('data', d => { out += d; const m = out.match(/listening port=(\d+)/); if (m) res({ port: +m[1], out: () => out }); }); child.stderr.on('data', d => { out += d; }); child.once('exit', c => rej(new Error('exited ' + c + ': ' + out.slice(0, 300)))); setTimeout(() => rej(new Error('timeout: ' + out.slice(0, 300))), 10000); });
+  return new Promise((res, rej) => { child.stdout.on('data', d => { out += d; const m = out.match(/listening port=(\d+)/); if (m) res({ port: +m[1], securePort: +((out.match(/secure port=(\d+)/) || [])[1] || 0), out: () => out }); }); child.stderr.on('data', d => { out += d; }); child.once('exit', c => rej(new Error('exited ' + c + ': ' + out.slice(0, 300)))); setTimeout(() => rej(new Error('timeout: ' + out.slice(0, 300))), 10000); });
 }
 const getHttps = port => new Promise((res, rej) => https.get({ host: '127.0.0.1', port, path: '/healthz', rejectUnauthorized: false }, r => { let b = ''; r.on('data', d => { b += d; }); r.on('end', () => res(JSON.parse(b))); }).on('error', rej));
 
@@ -26,10 +26,16 @@ describe('npm start script', () => {
     const dir = project({ '.env.example': 'PORT=0\n' }), s = await start(dir, { TRUST_PROXY: '1', DATA_DIR: path.join(dir, 'data') });
     assert.equal((await (await fetch(`http://127.0.0.1:${s.port}/healthz`)).json()).ok, true);
   });
-  it('personal machine: creates .env from .env.example, loads it and serves HTTPS', { skip: !HAS_OPENSSL && 'openssl is not installed' }, async () => {
+  it('personal machine: creates .env from .env.example, loads it and serves plain HTTP and HTTPS together', { skip: !HAS_OPENSSL && 'openssl is not installed' }, async () => {
     const dir = project({ '.env.example': `# comment\nPORT=0\nDATA_DIR=${path.join('.', 'mydata')}\nSITE_NAME="My Net"   # inline comment\n` }), s = await start(dir);
-    assert.ok(fs.existsSync(path.join(dir, '.env')), '.env was created'); assert.ok(/https:\/\/localhost/.test(s.out()), 'HTTPS banner'); assert.equal((await getHttps(s.port)).ok, true);
+    assert.ok(fs.existsSync(path.join(dir, '.env')), '.env was created'); assert.ok(/https:\/\/localhost/.test(s.out()), 'HTTPS banner');
+    assert.ok(s.securePort > 0 && s.securePort !== s.port, 'a second port for HTTPS'); assert.equal((await getHttps(s.securePort)).ok, true);
+    assert.equal((await (await fetch(`http://127.0.0.1:${s.port}/healthz`)).json()).ok, true);
     assert.ok(fs.existsSync(path.join(dir, 'mydata')), 'DATA_DIR from the file is used');
+  });
+  it('HTTPS=1 in .env keeps the old single-HTTPS mode', { skip: !HAS_OPENSSL && 'openssl is not installed' }, async () => {
+    const dir = project({ '.env': 'PORT=0\nHTTPS=1\n' }), s = await start(dir, { DATA_DIR: path.join(dir, 'data') });
+    assert.equal(s.securePort, 0); assert.equal((await getHttps(s.port)).ok, true);
   });
   it('HTTPS=0 in .env keeps plain HTTP on a personal machine', async () => {
     const dir = project({ '.env': 'PORT=0\nHTTPS=0\n' }), s = await start(dir, { DATA_DIR: path.join(dir, 'data') });

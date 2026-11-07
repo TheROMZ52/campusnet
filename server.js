@@ -16,6 +16,8 @@ const num = (name, def, min = 0.001) => {
 
 /* ---------- configuration (validated at startup) ---------- */
 const PORT = num('PORT', 3000, 0);
+const HTTPS_PORT = process.env.HTTPS_PORT === undefined || process.env.HTTPS_PORT === '' ? null : num('HTTPS_PORT', 0, 0);   // set: plain HTTP on PORT and HTTPS on HTTPS_PORT together
+if (HTTPS_PORT !== null && HTTPS_PORT !== 0 && HTTPS_PORT === PORT) bail('PORT and HTTPS_PORT must be different');
 const DATA = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const UP = path.join(DATA, 'uploads');
 const PUB = path.join(__dirname, 'public');
@@ -49,7 +51,7 @@ try { fs.mkdirSync(UP, { recursive: true }); fs.accessSync(DATA, fs.constants.W_
 /* ---------- optional HTTPS (browsers only allow Web Crypto on HTTPS or localhost) ---------- */
 function tlsOptions() {
   let cert = process.env.TLS_CERT, key = process.env.TLS_KEY;
-  if (!cert && process.env.HTTPS === '1') {
+  if (!cert && (process.env.HTTPS === '1' || HTTPS_PORT !== null)) {
     cert = path.join(DATA, 'cert.pem'); key = path.join(DATA, 'key.pem');
     if (!fs.existsSync(cert) || !fs.existsSync(key)) {
       const ips = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4').map(i => 'IP:' + i.address);
@@ -213,7 +215,7 @@ const SEC = {
 };
 const json = (res, code, o, extra) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...SEC, ...extra }); res.end(JSON.stringify(o)); };
 const cookie = (req, n) => { const c = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(n + '=')); return c ? c.slice(n.length + 1) : ''; };
-const isSecure = req => !!TLS || (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https');
+const isSecure = req => !!req.socket.encrypted || (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https');
 const usedTotal = () => files.reduce((a, f) => a + f.size, 0);
 const usedBy = name => files.reduce((a, f) => a + (f.owner === name ? f.size : 0), 0);
 let inflightTotal = 0; const inflightUser = new Map(), activeUploads = new Map();
@@ -316,7 +318,7 @@ const tempPassword = () => Array.from(crypto.randomBytes(12), b => TEMP_ALPHABET
 function dirSize(d) { let n = 0; try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); try { n += e.isDirectory() ? dirSize(f) : fs.statSync(f).size; } catch { /* ignore */ } } } catch { /* ignore */ } return n; }
 const validBlob = b => !!b && typeof b.s === 'string' && typeof b.iv === 'string' && typeof b.ct === 'string' && b.s.length <= 100 && b.iv.length <= 100 && b.ct.length <= 3000 && b.ct.length > 0;
 
-const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h))((req, res) => {
+const requestHandler = (req, res) => {
   let url; try { url = new URL(req.url, 'http://x'); } catch { return json(res, 400, { error: 'bad url' }); }
   if (url.pathname === '/healthz') return json(res, 200, { ok: true, uptime: Math.round(process.uptime()), online: online().length });
   if (url.pathname === '/manifest.webmanifest' && (req.method === 'GET' || req.method === 'HEAD')) {   // name follows SITE_NAME
@@ -349,15 +351,17 @@ const server = (TLS ? h => https.createServer(TLS, h) : h => http.createServer(h
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(fp)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SEC });
     res.end(req.method === 'HEAD' ? undefined : buf);
   });
-});
-server.requestTimeout = 0;      // uploads may take long; stalled bodies are cut by the per-upload inactivity timeout
-server.headersTimeout = 30000; server.keepAliveTimeout = 5000;
+};
+const server = TLS && HTTPS_PORT === null ? https.createServer(TLS, requestHandler) : http.createServer(requestHandler);
+const secureServer = TLS && HTTPS_PORT !== null ? https.createServer(TLS, requestHandler) : null;
+for (const srv of [server, secureServer]) if (srv) { srv.requestTimeout = 0; srv.headersTimeout = 30000; srv.keepAliveTimeout = 5000; }   // uploads may take long; stalled bodies are cut by the per-upload inactivity timeout
 
 /* ---------- WebSocket ---------- */
 const wss = new WebSocketServer({
-  server, maxPayload: 16 * 1024,
+  noServer: true, maxPayload: 16 * 1024,
   verifyClient: ({ origin, req }) => { if (!origin) return true; try { return new URL(origin).host === req.headers.host; } catch { return false; } }
 });
+for (const srv of [server, secureServer]) if (srv) srv.on('upgrade', (req, socket, head) => wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req)));
 const conns = new Map();
 
 function dmsFor(name) {
@@ -649,7 +653,7 @@ let closing = false;
 function shutdown(sig) {
   if (closing) return; closing = true; log('INFO', `${sig} received, flushing data and shutting down`);
   flushAll(); wss.clients.forEach(ws => { try { ws.close(1001, 'server restarting'); } catch { /* ignore */ } });
-  server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref();
+  server.close(() => process.exit(0)); if (secureServer) secureServer.close(); setTimeout(() => process.exit(0), 4000).unref();
 }
 ['SIGINT', 'SIGTERM'].forEach(sig => process.on(sig, () => shutdown(sig)));
 process.on('exit', flushAll);
@@ -657,10 +661,14 @@ process.on('uncaughtException', e => { console.error('FATAL uncaught exception:'
 process.on('unhandledRejection', e => log('ERROR', 'unhandled rejection: ' + (e && e.stack || e)));
 
 server.on('error', e => bail(e.code === 'EADDRINUSE' ? `port ${PORT} is already in use` : e.message));
-server.listen(PORT, '0.0.0.0', () => {
-  const port = server.address().port, proto = TLS ? 'https' : 'http';
-  console.log(`\n  ${SITE} is running\n  local:   ${proto}://localhost:${port}`);
-  for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) console.log(`  network: ${proto}://${i.address}:${port}   <- share this on your LAN`);
-  if (!TLS) console.log('  note: encrypted DMs need HTTPS or localhost. On a LAN start with HTTPS=1 (self-signed) or put it behind TLS.');
-  console.log(`  access code: ${CODE ? 'ON' : 'off'}   max file: ${fmt(MAX_FILE)}   data: ${DATA}\n  listening port=${port}\n`);
-});
+if (secureServer) secureServer.on('error', e => bail(e.code === 'EADDRINUSE' ? `port ${HTTPS_PORT} is already in use` : e.message));
+const listenOn = (srv, p) => new Promise(resolve => srv.listen(p, '0.0.0.0', () => resolve(srv.address().port)));
+(async () => {
+  const port = await listenOn(server, PORT), sport = secureServer ? await listenOn(secureServer, HTTPS_PORT) : null, plain = !!TLS && !secureServer ? 'https' : 'http';
+  const urls = (host, tag) => { console.log(`  ${tag}${plain}://${host}:${port}`); if (sport) console.log(`  ${tag}https://${host}:${sport}   (self-signed unless TLS_CERT is set)`); };
+  console.log(`\n  ${SITE} is running`); urls('localhost', 'local:   ');
+  for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) if (i.family === 'IPv4' && !i.internal) urls(i.address, 'network: ');
+  if (sport) console.log('  note: calls, encrypted DMs and installing the app need the https address (or localhost); plain http works for everything else.');
+  else if (!TLS) console.log('  note: encrypted DMs need HTTPS or localhost. On a LAN set HTTPS_PORT=3443 (self-signed, next to plain HTTP) or put it behind TLS.');
+  console.log(`  access code: ${CODE ? 'ON' : 'off'}   max file: ${fmt(MAX_FILE)}   data: ${DATA}\n  listening port=${port}${sport ? `\n  secure port=${sport}` : ''}\n`);
+})();

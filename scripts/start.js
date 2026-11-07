@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-/* `npm start`. Loads `.env` if there is one and, on a personal machine, turns HTTPS on (self-signed certificate) so encrypted
-   direct messages and calls work on a LAN. On a hosting platform nothing is forced: when PORT or TRUST_PROXY is already set in the
+/* `npm start`. Loads `.env` if there is one and, on a personal machine, serves plain HTTP on PORT and HTTPS (self-signed
+   certificate, PORT+443) next to it, so encrypted direct messages and calls work on a LAN over the https address. On a hosting platform nothing is forced: when PORT or TRUST_PROXY is already set in the
    real environment (or NODE_ENV=production) the server stays on plain HTTP behind the platform's proxy, and a missing .env is fine.
    Real environment variables always win over the file. `node server.js` itself reads neither .env nor sets HTTPS. */
 const fs = require('node:fs'), path = require('node:path');
@@ -19,5 +19,7 @@ function loadEnv(file) {
 }
 loadEnv(envFile);
 const hostedNow = hosted || process.env.TRUST_PROXY !== undefined || process.env.NODE_ENV === 'production';   // a .env that sets TRUST_PROXY marks a hosted copy too
-if (!hostedNow && process.env.HTTPS === undefined && !process.env.TLS_CERT) process.env.HTTPS = '1';
+if (!hostedNow && process.env.HTTPS === undefined && !process.env.TLS_CERT && process.env.HTTPS_PORT === undefined) {   // personal machine: plain HTTP on PORT and HTTPS (self-signed) next to it
+  const p = Number(process.env.PORT ?? 3000); process.env.HTTPS_PORT = p === 0 ? '0' : p + 443 <= 65535 ? String(p + 443) : '0';
+}
 require('../server.js');
