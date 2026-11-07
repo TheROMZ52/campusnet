@@ -133,7 +133,7 @@ select option{background:#0a100c;color:var(--text)}
 .gate.shake{animation:shake .4s}
 
 /* 5 ---- shell ---- */
-#app{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto;min-height:0;height:100%;height:100dvh}
+#app{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto;min-height:0;height:100%;height:var(--app-h,100%);height:100dvh}
 #bar{grid-row:1}#desk{grid-row:2}#sbar{grid-row:3}#tabs{grid-row:4}
 #bar{display:flex;align-items:center;gap:10px;padding:calc(8px + var(--safe-t)) 12px 8px;border-bottom:1px solid var(--line);background:rgba(5,8,6,.72);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);flex:none}
 .brand.mini{gap:10px}.brand.mini b{font:700 14px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--text)}

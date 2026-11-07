@@ -1,4 +1,9 @@
 'use strict';
+(function () {
+  if (window.CSS && CSS.supports && CSS.supports('height', '100dvh')) return;
+  const root = document.documentElement, set = () => root.style.setProperty('--app-h', innerHeight + 'px');
+  set(); addEventListener('resize', set); addEventListener('orientationchange', set);
+})();
 /* Visual layer: ambient mesh (decorative) and live topology of the real online users.
    The topology is drawn twice: a small map in the Network window and a large one as the desktop wallpaper. */
 (function () {

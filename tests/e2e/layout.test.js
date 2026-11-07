@@ -87,6 +87,22 @@ describe('layout on small screens', () => {
     await ctx.close();
   });
 
+  it('without dvh support the app height follows the real window height, also when it shrinks (keyboard)', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 766 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage(), name = 'nodvh2';
+    page.on('pageerror', e => problems.push(e.message));
+    await page.addInitScript(() => { const o = CSS.supports.bind(CSS); CSS.supports = (...a) => (a.join(' ').includes('dvh') ? false : o(...a)); });
+    await page.route('**/style.css', async route => { const res = await route.fetch(); await route.fulfill({ response: res, body: (await res.text()).replace(/(min-)?height:100dvh;?/g, '') }); });
+    await page.goto(s.base + '/');
+    await page.click('#tabUp'); await page.fill('#nameIn', name); await page.fill('#pwIn', PW); await page.fill('#pw2In', PW); await page.click('#goBtn');
+    await page.waitForFunction(n => document.querySelector('#meBar')?.textContent.startsWith(n), name, { timeout: 15000 });
+    const read = () => page.evaluate(() => ({ vh: innerHeight, v: document.documentElement.style.getPropertyValue('--app-h'), app: document.querySelector('#app').getBoundingClientRect().height, tabsBottom: document.querySelector('#tabs').getBoundingClientRect().bottom }));
+    let m = await read(); assert.equal(m.v, m.vh + 'px'); assert.ok(m.app >= m.vh - 2 && m.tabsBottom >= m.vh - 4, JSON.stringify(m));
+    await page.setViewportSize({ width: 360, height: 440 }); await page.waitForTimeout(300);
+    m = await read(); assert.equal(m.v, m.vh + 'px'); assert.ok(m.app >= m.vh - 2 && m.tabsBottom >= m.vh - 4, JSON.stringify(m));
+    await ctx.close();
+  });
+
   for (const height of [480, 568, 640]) {
     it(`login and register remain reachable at ${height}px viewport height`, async () => {
       const ctx = await browser.newContext({ viewport: { width: 360, height }, isMobile: true, hasTouch: true, locale: 'fa-IR' });

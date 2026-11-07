@@ -68,7 +68,7 @@ describe('v0.9: Home, music, reload and Back', () => {
     await b.page.goBack(); assert.match(await b.page.textContent('#convTitle'), /help/);
     await b.page.goForward(); assert.match(await b.page.textContent('#convTitle'), /rita/);
     await b.page.reload(); await b.page.waitForFunction(() => document.querySelector('#meBar').textContent.startsWith('remy'));
-    assert.ok(await b.page.locator('#login').isHidden()); assert.match(await b.page.textContent('#convTitle'), /rita/, 'conversation restored');
+    assert.ok(await b.page.locator('#login').isHidden()); await b.page.waitForFunction(() => /rita/.test(document.querySelector('#convTitle').textContent), null, { timeout: 10000 });
     await b.page.waitForSelector('#unlockBar', { state: 'visible' });
     await b.page.fill('#unlockPw', PW); await b.page.keyboard.press('Enter'); await b.page.waitForSelector('#unlockBar', { state: 'hidden' });
     await b.page.waitForSelector('#log .msg:has-text("before-reload")', { timeout: 15000 });

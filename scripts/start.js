@@ -18,5 +18,6 @@ function loadEnv(file) {
   }
 }
 loadEnv(envFile);
-if (!hosted && process.env.HTTPS === undefined && !process.env.TLS_CERT) process.env.HTTPS = '1';
+const hostedNow = hosted || process.env.TRUST_PROXY !== undefined || process.env.NODE_ENV === 'production';   // a .env that sets TRUST_PROXY marks a hosted copy too
+if (!hostedNow && process.env.HTTPS === undefined && !process.env.TLS_CERT) process.env.HTTPS = '1';
 require('../server.js');

@@ -54,3 +54,6 @@ Voice calls relay audio through the server (about 16 KB/s per active call), so t
 
 ## Docker
 `docker build -t campusnet . && docker run -p 3000:3000 -v campusnet-data:/data -e TRUST_PROXY=1 -e ADMIN_USERS=you -e ADMIN_CODE=... campusnet`
+
+## Pufferland
+`npm run pack:pufferland -- --admin NAME` builds a zip for Pufferland's manual upload (default start file `index.js`, generated `.env`); the field-by-field guide is `PUFFERLAND.fa.md` (Persian).
