@@ -11,6 +11,21 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npm test
-      - run: npx playwright-core install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Unit tests
+        shell: bash {0}
+        run: |
+          npm test > unit.log 2>&1; c=$?
+          if [ $c -ne 0 ]; then echo "::error title=unit-tests::$( (grep -E 'not ok|Error' unit.log | head -30; tail -n 15 unit.log) | cut -c1-200 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}')"; fi
+          exit $c
+      - name: Install browser
+        shell: bash {0}
+        run: |
+          npx playwright-core install --with-deps chromium > pw.log 2>&1; c=$?
+          if [ $c -ne 0 ]; then echo "::error title=browser-install::$(tail -n 25 pw.log | cut -c1-200 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}')"; fi
+          exit $c
+      - name: Browser tests
+        shell: bash {0}
+        run: |
+          npm run test:e2e > e2e.log 2>&1; c=$?
+          if [ $c -ne 0 ]; then echo "::error title=e2e-tests::$( (grep -E '^ *not ok|Timeout|error:' e2e.log | head -30; tail -n 10 e2e.log) | cut -c1-200 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}')"; fi
+          exit $c
