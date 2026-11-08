@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.http.SslCertificate
 import android.net.http.SslError
 import android.os.Build
 import android.os.Environment
@@ -91,6 +92,7 @@ import androidx.core.content.ContextCompat
 import app.campusnet.BuildConfig
 import app.campusnet.R
 import app.campusnet.bridge.AppBridge
+import app.campusnet.data.Pins
 import app.campusnet.data.ServerStore
 import app.campusnet.service.KeepAliveService
 
@@ -159,6 +161,12 @@ private fun askBattery(ctx: Context, store: ServerStore) {
             )
         }
     }
+}
+
+private fun sslFingerprint(certificate: SslCertificate?): String? {
+    if (certificate == null) return null
+    val der = SslCertificate.saveState(certificate).getByteArray("x509-certificate") ?: return null
+    return Pins.sha256Hex(der)
 }
 
 @Composable
@@ -261,6 +269,12 @@ fun WebScreen(origin: String, name: String, store: ServerStore, onChangeServer: 
                             }
 
                             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                                val pin = store.pin(origin)
+                                val sameHost = runCatching { Uri.parse(error.url).host == Uri.parse(origin).host }.getOrDefault(false)
+                                if (pin != null && sameHost && sslFingerprint(error.certificate) == pin) {
+                                    handler.proceed()
+                                    return
+                                }
                                 handler.cancel()
                                 failedUrl = error.url?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: origin
                                 securityFailure = true

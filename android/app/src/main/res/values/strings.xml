@@ -5,6 +5,7 @@
     <string name="address_hint" translatable="false">192.168.1.5:3000</string>
     <string name="err_invalid">Invalid address</string>
     <string name="err_unreachable">Can\'t reach the server</string>
+    <string name="err_cert_changed">Server certificate changed</string>
     <string name="err_not_campusnet">This is not a CampusNet server</string>
     <string name="retry">Retry</string>
     <string name="change_server">Change server</string>

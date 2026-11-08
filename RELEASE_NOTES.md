@@ -1,5 +1,13 @@
 # Release notes
 
+## v0.16.1 - Android: self-signed HTTPS with a pinned certificate
+- The connect check no longer trusts every certificate blindly: it first tries normal system validation, and only if that fails does it accept the server's certificate, remembering its **SHA-256 fingerprint** (trust on first use). The pin is stored per server.
+- The WebView proceeds past a certificate error only when the certificate's fingerprint equals the pin for that host (page, subresources and the WebSocket); anything else is refused as before.
+- If a pinned server later presents a different certificate, connecting shows "Server certificate changed" (Persian: گواهی سرور عوض شده) and fails; removing the server chip (×) forgets the pin. A server that later gets a real certificate simply clears its pin.
+- Typing `192.168.1.5:3443` is enough: https is tried first, then http (existing behaviour). Together with `HTTPS_PORT` (v0.16.0) calls and encrypted DMs now work in the app over a LAN.
+- Android version 0.16.1. Unit tests (CI): new `PinTest` (SHA-256 vector, fingerprint of a real PEM equals openssl's, first use records, matching pin accepted, different pin rejected and flagged).
+- **Not verified on a phone:** this was compiled and unit-tested only by CI. Unknown until tried: whether this WebView accepts the pinned certificate for the WebSocket (`wss://`) as well, and the first-use trust is only as good as the network at that moment. Not done: downloads from a self-signed server (the system download manager does not trust the certificate).
+
 ## v0.16.0 - plain HTTP and HTTPS at the same time
 - New `HTTPS_PORT`: when set, the server listens on `PORT` for plain **HTTP** and on `HTTPS_PORT` for **HTTPS**, one process, one data folder, one WebSocket hub (a user on `ws://` and a user on `wss://` see each other and chat). The certificate is the openssl self-signed one (`DATA_DIR/cert.pem`) or `TLS_CERT` / `TLS_KEY`. `PORT` and `HTTPS_PORT` must differ. The banner prints both addresses plus an extra `secure port=` line.
 - `npm start` on a personal machine now serves HTTP on `PORT` (3000) and HTTPS on `PORT+443` (3443) instead of HTTPS only on 3000, so existing `http://` bookmarks and the Android app keep working while calls, encrypted DMs and installing the app use the `https://` address. **Behaviour change:** an old `https://host:3000` bookmark now needs `:3443`. `HTTPS=0` still means plain HTTP only and `HTTPS=1` still means HTTPS only on `PORT`.

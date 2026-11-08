@@ -142,7 +142,7 @@ fun ConnectScreen(store: ServerStore, onConnected: (origin: String, name: String
             val list = Address.candidates(raw)
             var result: Probe = Probe.Unreachable
             for (c in list) {
-                result = probe(c)
+                result = probe(c, store.pin(c))
                 if (result is Probe.Ok) break
             }
             val ok = result as? Probe.Ok
@@ -150,6 +150,7 @@ fun ConnectScreen(store: ServerStore, onConnected: (origin: String, name: String
                 val res = when {
                     list.isEmpty() -> R.string.err_invalid
                     result is Probe.NotCampusNet -> R.string.err_not_campusnet
+                    result is Probe.CertChanged -> R.string.err_cert_changed
                     else -> R.string.err_unreachable
                 }
                 lastError = res
@@ -159,6 +160,7 @@ fun ConnectScreen(store: ServerStore, onConnected: (origin: String, name: String
                 for (v in listOf(16f, -13f, 9f, -6f, 3f, 0f)) shake.animateTo(v, tween(55))
             } else {
                 store.add(ok.origin)
+                store.setPin(ok.origin, ok.pin)
                 recents = store.recent()
                 phase = Phase.Success
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)

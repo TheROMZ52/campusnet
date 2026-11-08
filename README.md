@@ -66,7 +66,8 @@ On phones and tablets the tabbed layout is used and the apps open full screen fr
 - A foreground service (with a quiet "Connected" notification) keeps the connection alive in the background, and messages that arrive while the app is not on screen become real Android notifications (the text is decrypted by the page, the server never sees it). The first launch asks for notification permission and for exemption from battery optimisation.
 - Voice calls (microphone permission), file upload and download, music and the whole E2EE chat work as in the browser; links to other sites open in the phone's browser.
 - The APK is built by GitHub Actions (`.github/workflows/android.yml`): download `CampusNet.apk` from the **android-latest** release (main) or **android-dev** (other branches). It is signed with the key in `android/app/campusnet.jks` (password in `app/build.gradle.kts`): fine for sideloading to your own phones, not for a public store release. Build locally with Gradle 8.10 and JDK 17: `cd android && gradle assembleRelease`.
-- Not done: self-signed HTTPS certificates are rejected (use plain HTTP on the LAN or a real certificate), and the app has not been tested on a range of phones yet.
+- **Self-signed HTTPS on a LAN** (`https://192.168.1.5:3443`, see `HTTPS_PORT`): the first connection pins the certificate's SHA-256 fingerprint (trust on first use) and from then on only that exact certificate is accepted, so calls and encrypted DMs work over the LAN. If the certificate changes the app says so and refuses until you remove the server chip (×) and connect again.
+- Not done: file downloads from a server with a self-signed certificate (the system download manager does not trust it), and the app has not been tested on a range of phones yet.
 
 </details>
 

@@ -5,6 +5,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLException
 import java.net.URI
 import java.net.URL
 import java.util.Locale
@@ -63,7 +68,13 @@ class ServerStore(context: Context) {
     }
 
     fun remove(origin: String) {
-        prefs.edit().putStringSet("recent_servers", recent().filterNot { it == origin }.toSet()).apply()
+        prefs.edit().putStringSet("recent_servers", recent().filterNot { it == origin }.toSet()).remove("pin:$origin").apply()
+    }
+
+    fun pin(origin: String): String? = prefs.getString("pin:$origin", null)
+
+    fun setPin(origin: String, pin: String?) {
+        prefs.edit().apply { if (pin == null) remove("pin:$origin") else putString("pin:$origin", pin) }.apply()
     }
 
     fun batteryAsked(): Boolean = prefs.getBoolean("battery_asked", false)
@@ -74,64 +85,79 @@ class ServerStore(context: Context) {
 }
 
 sealed class Probe {
-    data class Ok(val origin: String, val name: String) : Probe()
+    data class Ok(val origin: String, val name: String, val pin: String? = null) : Probe()
+    object CertChanged : Probe()
     data class NotCampusNet(val detail: String? = null) : Probe()
     object Unreachable : Probe()
 }
 
-private val probeSslContext: SSLContext by lazy {
-    SSLContext.getInstance("TLS").apply {
-        val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun getAcceptedIssuers() = emptyArray<java.security.cert.X509Certificate>()
-            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-        })
-        init(null, trustAll, java.security.SecureRandom())
+object Pins {
+    fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+}
+
+internal class CapturingTrust(private val expected: String?) : X509TrustManager {
+    @Volatile var seen: String? = null
+    @Volatile var mismatch = false
+
+    override fun getAcceptedIssuers() = emptyArray<X509Certificate>()
+
+    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+
+    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+        val fingerprint = Pins.sha256Hex(chain[0].encoded)
+        seen = fingerprint
+        if (expected != null && expected != fingerprint) {
+            mismatch = true
+            throw CertificateException("certificate changed")
+        }
     }
 }
 
-suspend fun probe(origin: String): Probe = withContext(Dispatchers.IO) {
-    var connection: HttpURLConnection? = null
+private fun httpGet(url: String, trust: CapturingTrust?): Pair<Int, String> {
+    val connection = URL(url).openConnection() as HttpURLConnection
     try {
-        connection = URL("$origin/healthz").openConnection() as HttpURLConnection
         connection.connectTimeout = 4500
         connection.readTimeout = 4500
         connection.requestMethod = "GET"
         connection.instanceFollowRedirects = true
-        if (connection is HttpsURLConnection) {
-            connection.sslSocketFactory = probeSslContext.socketFactory
+        if (trust != null && connection is HttpsURLConnection) {
+            connection.sslSocketFactory = SSLContext.getInstance("TLS").apply { init(null, arrayOf<TrustManager>(trust), SecureRandom()) }.socketFactory
             connection.hostnameVerifier = HostnameVerifier { _, _ -> true }
         }
         val status = connection.responseCode
+        val body = if (status in 200..299) connection.inputStream.bufferedReader().use { it.readText() } else ""
+        return status to body
+    } finally {
+        connection.disconnect()
+    }
+}
+
+suspend fun probe(origin: String, pinned: String? = null): Probe = withContext(Dispatchers.IO) {
+    var trust: CapturingTrust? = null
+    fun fetch(path: String): Pair<Int, String> {
+        try {
+            return httpGet(origin + path, trust)
+        } catch (e: SSLException) {
+            if (!origin.startsWith("https://") || trust != null) throw e
+            val capturing = CapturingTrust(pinned)
+            trust = capturing
+            return httpGet(origin + path, capturing)
+        }
+    }
+    try {
+        val (status, body) = fetch("/healthz")
         if (status !in 200..299) return@withContext Probe.NotCampusNet("HTTP $status")
-        val body = connection.inputStream.bufferedReader().use { it.readText() }
         val health = runCatching { JSONObject(body) }.getOrNull()
             ?: return@withContext Probe.NotCampusNet("Invalid health response")
         if (health.optBoolean("ok") != true) return@withContext Probe.NotCampusNet("Not a CampusNet server")
-
-        connection.disconnect()
-        connection = URL("$origin/api/info").openConnection() as HttpURLConnection
-        connection.connectTimeout = 4500
-        connection.readTimeout = 4500
-        connection.requestMethod = "GET"
-        if (connection is HttpsURLConnection) {
-            connection.sslSocketFactory = probeSslContext.socketFactory
-            connection.hostnameVerifier = HostnameVerifier { _, _ -> true }
-        }
-        val infoStatus = connection.responseCode
+        val (infoStatus, infoBody) = fetch("/api/info")
         val name = if (infoStatus in 200..299) {
-            runCatching {
-                JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                    .optString("name", "CampusNet")
-                    .ifBlank { "CampusNet" }
-            }.getOrDefault("CampusNet")
+            runCatching { JSONObject(infoBody).optString("name", "CampusNet").ifBlank { "CampusNet" } }.getOrDefault("CampusNet")
         } else {
             "CampusNet"
         }
-        Probe.Ok(origin, name)
+        Probe.Ok(origin, name, trust?.seen)
     } catch (_: Exception) {
-        Probe.Unreachable
-    } finally {
-        connection?.disconnect()
+        if (trust?.mismatch == true) Probe.CertChanged else Probe.Unreachable
     }
 }

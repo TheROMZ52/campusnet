@@ -3,6 +3,7 @@
     <string name="connect">اتصال</string>
     <string name="err_invalid">آدرس معتبر نیست</string>
     <string name="err_unreachable">به سرور نمی‌رسم</string>
+    <string name="err_cert_changed">گواهی سرور عوض شده</string>
     <string name="err_not_campusnet">این سرور CampusNet نیست</string>
     <string name="retry">تلاش دوباره</string>
     <string name="change_server">تغییر سرور</string>
