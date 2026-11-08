@@ -6,6 +6,7 @@
 - If a pinned server later presents a different certificate, connecting shows "Server certificate changed" (Persian: گواهی سرور عوض شده) and fails; removing the server chip (×) forgets the pin. A server that later gets a real certificate simply clears its pin.
 - Typing `192.168.1.5:3443` is enough: https is tried first, then http (existing behaviour). Together with `HTTPS_PORT` (v0.16.0) calls and encrypted DMs now work in the app over a LAN.
 - Android version 0.16.1. Unit tests (CI): new `PinTest` (SHA-256 vector, fingerprint of a real PEM equals openssl's, first use records, matching pin accepted, different pin rejected and flagged).
+- CI: the web workflow runs on `ubuntu-24.04` because `ubuntu-latest` became Ubuntu 26.04, which Playwright 1.56 cannot install Chromium on (every browser-test run failed at the install step); it now also reports a failing unit, install or browser step as an annotation.
 - **Not verified on a phone:** this was compiled and unit-tested only by CI. Unknown until tried: whether this WebView accepts the pinned certificate for the WebSocket (`wss://`) as well, and the first-use trust is only as good as the network at that moment. Not done: downloads from a self-signed server (the system download manager does not trust the certificate).
 
 ## v0.16.0 - plain HTTP and HTTPS at the same time
