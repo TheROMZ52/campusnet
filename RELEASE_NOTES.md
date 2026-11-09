@@ -1,5 +1,11 @@
 # Release notes
 
+## v0.16.2 - older WebViews, and the running version is visible
+- **`/healthz` and `/api/info` now include `version`.** Open `https://<your-domain>/healthz` in any browser to see which version the server is really running: a phone that still shows the collapsed chat strip (tabs under the top bar, empty space below) is talking to a server older than 0.15.5.
+- Reproduced the collapsed-chat bug with real old Chromium builds (86, 92, 103: no `dvh`): the 0.15.4 layout collapses to half the screen with a 79px chat strip in all of them, the current layout fills the screen in all of them.
+- Older WebViews (Android System WebView below 86, e.g. 80) failed at start-up because `replaceChildren` does not exist there, which left the app half initialised. `public/net.js` now provides small fallbacks for `replaceChildren`, `String.replaceAll`, `Array.at` and `Object.hasOwn`; in Chromium 80 the app now signs in, has no script errors and lays out correctly. New e2e test removes those four APIs and checks that sign-in works.
+- Not done: nothing older than Chromium 80 was checked, and no real phone was available.
+
 ## v0.16.1 - Android: self-signed HTTPS with a pinned certificate
 - The connect check no longer trusts every certificate blindly: it first tries normal system validation, and only if that fails does it accept the server's certificate, remembering its **SHA-256 fingerprint** (trust on first use). The pin is stored per server.
 - The WebView proceeds past a certificate error only when the certificate's fingerprint equals the pin for that host (page, subresources and the WebSocket); anything else is refused as before.

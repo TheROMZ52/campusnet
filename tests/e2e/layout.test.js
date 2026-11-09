@@ -103,6 +103,17 @@ describe('layout on small screens', () => {
     await ctx.close();
   });
 
+  it('runs on an older WebView without replaceChildren, replaceAll, Array.at and Object.hasOwn', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 766 }, isMobile: true, hasTouch: true }), page = await ctx.newPage(), errs = [];
+    page.on('pageerror', e => errs.push(e.message));
+    await page.addInitScript(() => { for (const o of [Element.prototype, Document.prototype, DocumentFragment.prototype]) delete o.replaceChildren; delete String.prototype.replaceAll; delete Array.prototype.at; delete Object.hasOwn; });
+    await page.goto(s.base + '/');
+    await page.click('#tabUp'); await page.fill('#nameIn', 'oldweb'); await page.fill('#pwIn', PW); await page.fill('#pw2In', PW); await page.click('#goBtn');
+    await page.waitForFunction(() => document.querySelector('#meBar')?.textContent.startsWith('oldweb'), null, { timeout: 15000 });
+    assert.equal(await page.evaluate(() => typeof Element.prototype.replaceChildren), 'function'); assert.deepEqual(errs, []);
+    await ctx.close();
+  });
+
   for (const height of [480, 568, 640]) {
     it(`login and register remain reachable at ${height}px viewport height`, async () => {
       const ctx = await browser.newContext({ viewport: { width: 360, height }, isMobile: true, hasTouch: true, locale: 'fa-IR' });

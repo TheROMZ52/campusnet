@@ -37,7 +37,7 @@ describe('Pufferland package', () => {
     let out = ''; const port = await new Promise((res, rej) => { child.stdout.on('data', d => { out += d; const m = out.match(/listening port=(\d+)/); if (m) res(+m[1]); }); child.once('exit', c => rej(new Error('exited ' + c + out))); setTimeout(() => rej(new Error('timeout ' + out)), 8000); });
     const base = 'http://127.0.0.1:' + port;
     assert.equal((await (await fetch(base + '/api/info')).json()).name, 'Dorm Net');
-    assert.equal((await fetch(base + '/healthz')).status, 200);
+    const health = await (await fetch(base + '/healthz')).json(); assert.equal(health.ok, true); assert.equal(health.version, require('../package.json').version, 'the running version is visible at /healthz');
     const WebSocket = require(path.join(dir, 'vendor/ws')), join = (name, extra = {}) => new Promise((res, rej) => { const ws = new WebSocket('ws://127.0.0.1:' + port, { headers: { 'x-forwarded-for': '203.0.113.' + Math.floor(Math.random() * 200 + 1) } }); ws.on('open', () => ws.send(JSON.stringify({ t: 'join', name, password: 'correct-horse-9', mode: 'register', ...extra }))); ws.on('message', d => { const x = JSON.parse(d); if (x.t === 'welcome' || x.t === 'err') { ws.close(); res(x); } }); ws.on('error', rej); });
     assert.equal((await join('mahbod')).t, 'err');
     assert.equal((await join('mahbod', { adminCode: r.adminCode })).t, 'welcome');

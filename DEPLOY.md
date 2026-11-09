@@ -60,3 +60,6 @@ Voice calls relay audio through the server (about 16 KB/s per active call), so t
 
 ## HTTP and HTTPS together
 On your own machine or VPS without a proxy: `HTTPS_PORT=3443` (with `TLS_CERT` and `TLS_KEY` for a real certificate) serves HTTPS next to plain HTTP on `PORT`; one server and one data folder behind both. On Pufferland and other platforms the platform terminates TLS and gives one port: leave `HTTPS_PORT` unset, the server answers whichever scheme the platform forwards (`TRUST_PROXY=1` makes the download cookie `Secure` when it sees `X-Forwarded-Proto: https`).
+
+## Which version is running?
+`GET /healthz` returns `{ok, version, uptime, online}`. Compare `version` with the one you deployed before debugging anything on a phone.

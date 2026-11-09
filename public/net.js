@@ -1,5 +1,13 @@
 'use strict';
 (function () {
+  const e = Element.prototype, d = Document.prototype, f = DocumentFragment.prototype;
+  const swap = function () { while (this.firstChild) this.removeChild(this.firstChild); this.append.apply(this, arguments); };
+  for (const o of [e, d, f]) if (!o.replaceChildren) o.replaceChildren = swap;
+  if (!String.prototype.replaceAll) String.prototype.replaceAll = function (a, b) { return a instanceof RegExp ? this.replace(a, b) : this.split(a).join(b); };
+  if (!Array.prototype.at) Array.prototype.at = function (i) { i = Math.trunc(i) || 0; return this[i < 0 ? this.length + i : i]; };
+  if (!Object.hasOwn) Object.hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+})();
+(function () {
   if (window.CSS && CSS.supports && CSS.supports('height', '100dvh')) return;
   const root = document.documentElement, set = () => root.style.setProperty('--app-h', innerHeight + 'px');
   set(); addEventListener('resize', set); addEventListener('orientationchange', set);

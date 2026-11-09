@@ -320,13 +320,13 @@ const validBlob = b => !!b && typeof b.s === 'string' && typeof b.iv === 'string
 
 const requestHandler = (req, res) => {
   let url; try { url = new URL(req.url, 'http://x'); } catch { return json(res, 400, { error: 'bad url' }); }
-  if (url.pathname === '/healthz') return json(res, 200, { ok: true, uptime: Math.round(process.uptime()), online: online().length });
+  if (url.pathname === '/healthz') return json(res, 200, { ok: true, version: VERSION, uptime: Math.round(process.uptime()), online: online().length });
   if (url.pathname === '/manifest.webmanifest' && (req.method === 'GET' || req.method === 'HEAD')) {   // name follows SITE_NAME
     const icon = (f, size, purpose) => ({ src: '/' + f, sizes: size + 'x' + size, type: 'image/png', purpose });
     res.writeHead(200, { 'Content-Type': TYPES['.webmanifest'], 'Cache-Control': 'no-cache', ...SEC });
     return res.end(req.method === 'HEAD' ? undefined : JSON.stringify({ id: '/', name: SITE, short_name: SITE.slice(0, 12), description: 'Private campus-style network: chat, groups, feed, music and voice calls.', start_url: '/', scope: '/', display: 'standalone', background_color: '#050706', theme_color: '#050706', icons: [icon('icon-192.png', 192, 'any'), icon('icon-512.png', 512, 'any'), icon('icon-maskable-512.png', 512, 'maskable')] }));
   }
-  if (url.pathname === '/api/info') return json(res, 200, { name: SITE, needCode: !!CODE, maxMB: Math.round(MAX_FILE / 1048576) });
+  if (url.pathname === '/api/info') return json(res, 200, { name: SITE, version: VERSION, needCode: !!CODE, maxMB: Math.round(MAX_FILE / 1048576) });
   if (req.method === 'POST' && url.pathname === '/api/session') {   // sets the HttpOnly cookie used only for downloads/previews (token never goes in a URL)
     const s = authToken(req.headers['x-token']); if (!s) return json(res, 401, { error: 'not signed in' });
     return json(res, 200, { ok: true }, { 'Set-Cookie': `cn_s=${s.token}; HttpOnly; SameSite=Strict; Path=/f/; Max-Age=${Math.floor(SESSION_MS / 1000)}${isSecure(req) ? '; Secure' : ''}` });
